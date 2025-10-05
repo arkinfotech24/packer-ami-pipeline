@@ -1,0 +1,65 @@
+name: 🧱 Build Hardened AMIs with Packer
+
+on:
+  push:
+    branches: [ "master" ]
+  workflow_dispatch:
+
+permissions:
+  id-token: write       # Required for OIDC federation
+  contents: read
+
+jobs:
+  packer-build:
+    name: Build Amazon Linux 2023 / RHEL9 / Ubuntu AMIs
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_REGION: us-east-1
+      PACKER_LOG: 1
+      PACKER_LOG_PATH: packer_build.log
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::697624189101:role/gha-packer-role
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install Packer
+        uses: hashicorp/setup-packer@v2
+        with:
+          packer_version: "1.11.0"
+
+      - name: Initialize Packer plugins
+        run: |
+          cd packer
+          packer init .
+
+      - name: Validate all packer templates
+        run: |
+          cd packer
+          packer validate -var-file=vars/dev.pkrvars.hcl -var "version=$(date +'%Y.%m.%d-%H%M')" .
+
+      - name: Build AMIs (Amazon Linux, RHEL9, Ubuntu)
+        run: |
+          cd packer
+          packer build -timestamp-ui \
+            -only=amazon-ebs.al2023,amazon-ebs.rhel9,amazon-ebs.ubuntu \
+            -var-file=vars/dev.pkrvars.hcl \
+            -var "version=$(date +'%Y.%m.%d-%H%M')" \
+            -var "cwagent=false" .
+
+      - name: Upload manifest.json to S3
+        run: |
+          aws s3 cp packer/manifest.json s3://ami-manifests-arkinfotech24-packer-ami-pipeline-us-east-1/ --region $AWS_REGION
+
+      - name: Upload packer build log (artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: packer-build-log
+          path: packer_build.log
+

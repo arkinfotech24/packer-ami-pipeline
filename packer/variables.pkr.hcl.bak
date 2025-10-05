@@ -1,0 +1,20 @@
+variable "instance_type" {
+  type    = string
+  default = "t3.micro"
+}
+
+variable "iam_instance_profile" {
+  type    = string
+  default = ""
+}
+
+variable "root_volume_size" {
+  type    = number
+  default = 16
+}
+
+variable "cwagent" {
+  type    = bool
+  default = true
+}
+
