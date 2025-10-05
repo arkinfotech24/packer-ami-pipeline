@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-echo "[20-cloudwatch-agent] Starting CloudWatch Agent install..."
+
+echo "[20-cloudwatch-agent] Starting CloudWatch Agent installation..."
 echo "[20-cloudwatch-agent] ENVIRONMENT=${ENVIRONMENT:-undefined}, DISTRO=${DISTRO:-undefined}"
 
 # ------------------------------------------------------------------------------
@@ -17,20 +18,30 @@ fi
 # ------------------------------------------------------------------------------
 case "$DISTRO" in
   al2023|amzn|amazon)
-    echo "[20-cloudwatch-agent] Installing CloudWatch Agent on Amazon Linux..."
-    sudo dnf -y update
-    sudo dnf -y install amazon-cloudwatch-agent || true
+    echo "[20-cloudwatch-agent] Installing CloudWatch Agent on Amazon Linux 2023..."
+    sudo dnf update -y --exclude=kernel* || true
+    sudo dnf install -y amazon-cloudwatch-agent || true
     ;;
 
-  rhel|rhel9)
-    echo "[20-cloudwatch-agent] Installing CloudWatch Agent on RHEL..."
-    curl -o /tmp/amazon-cloudwatch-agent.rpm https://s3.amazonaws.com/amazoncloudwatch-agent/redhat/amd64/latest/amazon-cloudwatch-agent.rpm
-    sudo rpm -Uvh /tmp/amazon-cloudwatch-agent.rpm || true
+  rhel9|rhel)
+    echo "[20-cloudwatch-agent] Installing CloudWatch Agent on RHEL 9..."
+    sudo dnf update -y --exclude=kernel* || true
+
+    # Fetch and install directly from AWS public S3
+    sudo curl -fSL -o /tmp/amazon-cloudwatch-agent.rpm \
+      https://s3.amazonaws.com/amazoncloudwatch-agent/redhat/amd64/latest/amazon-cloudwatch-agent.rpm
+
+    if [[ -f /tmp/amazon-cloudwatch-agent.rpm ]]; then
+      sudo rpm -Uvh /tmp/amazon-cloudwatch-agent.rpm || true
+    else
+      echo "[20-cloudwatch-agent] ⚠️ Failed to download CloudWatch Agent RPM."
+    fi
     ;;
 
   ubuntu)
     echo "[20-cloudwatch-agent] Installing CloudWatch Agent on Ubuntu..."
     sudo apt-get update -y
+    sudo apt-get upgrade -y --exclude=linux-image* || true
     sudo apt-get install -y amazon-cloudwatch-agent || true
     ;;
 
