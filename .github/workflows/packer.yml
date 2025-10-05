@@ -1,23 +1,34 @@
-name: 🧱 Build Hardened AMIs with Packer
+name: 🧱 Manual or Auto Packer AMI Build
 
 on:
   push:
     branches: [ "master" ]
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag (e.g. 1.0.15)"
+        required: true
+        default: "1.0.0"
+      environment:
+        description: "Environment (dev/test/prod)"
+        required: true
+        default: "dev"
 
 permissions:
-  id-token: write       # Required for OIDC federation
+  id-token: write
   contents: read
 
 jobs:
   packer-build:
-    name: Build Amazon Linux 2023 / RHEL9 / Ubuntu AMIs
+    name: Build AMIs (AL2023, RHEL9, Ubuntu)
     runs-on: ubuntu-latest
 
     env:
       AWS_REGION: us-east-1
       PACKER_LOG: 1
       PACKER_LOG_PATH: packer_build.log
+      VERSION: ${{ github.event.inputs.version }}
+      ENV: ${{ github.event.inputs.environment }}
 
     steps:
       - name: Checkout repository
@@ -34,30 +45,33 @@ jobs:
         with:
           packer_version: "1.11.0"
 
-      - name: Initialize Packer plugins
+      - name: Initialize Packer
         run: |
           cd packer
           packer init .
 
-      - name: Validate all packer templates
+      - name: Validate Template
         run: |
           cd packer
-          packer validate -var-file=vars/dev.pkrvars.hcl -var "version=$(date +'%Y.%m.%d-%H%M')" .
+          packer validate -var-file=vars/dev.pkrvars.hcl \
+            -var "version=${VERSION}" .
 
-      - name: Build AMIs (Amazon Linux, RHEL9, Ubuntu)
+      - name: Build Hardened AMIs
         run: |
           cd packer
           packer build -timestamp-ui \
             -only=amazon-ebs.al2023,amazon-ebs.rhel9,amazon-ebs.ubuntu \
             -var-file=vars/dev.pkrvars.hcl \
-            -var "version=$(date +'%Y.%m.%d-%H%M')" \
+            -var "version=${VERSION}" \
             -var "cwagent=false" .
 
       - name: Upload manifest.json to S3
         run: |
-          aws s3 cp packer/manifest.json s3://ami-manifests-arkinfotech24-packer-ami-pipeline-us-east-1/ --region $AWS_REGION
+          aws s3 cp packer/manifest.json \
+          s3://ami-manifests-arkinfotech24-packer-ami-pipeline-us-east-1/ \
+          --region $AWS_REGION
 
-      - name: Upload packer build log (artifact)
+      - name: Upload build log (artifact)
         uses: actions/upload-artifact@v4
         with:
           name: packer-build-log
