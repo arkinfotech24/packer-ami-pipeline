@@ -1,5 +1,5 @@
 #########################################
-# Terraform: GitHub OIDC + S3 + DynamoDB
+# Terraform: GitHub OIDC + S3 + DynamoDB + Packer Build Permissions
 #########################################
 
 terraform {
@@ -21,15 +21,15 @@ provider "aws" {
   region = var.region
 }
 
-variable "region" {
-  description = "AWS region for the OIDC setup"
-  type        = string
-}
+#variable "region" {
+#  description = "AWS region for the OIDC setup"
+#  type        = string
+#}
 
-variable "repo" {
-  description = "GitHub repo for OIDC trust (e.g., org/repo)"
-  type        = string
-}
+#variable "repo" {
+#  description = "GitHub repo for OIDC trust (e.g., org/repo)"
+#  type        = string
+#}
 
 #########################################
 # GitHub OIDC Identity Provider
@@ -50,7 +50,7 @@ resource "aws_iam_openid_connect_provider" "github" {
 #########################################
 
 resource "aws_s3_bucket" "manifests" {
-  bucket        = lower("ami-manifests-${replace(var.repo, "/", "-")}-${var.region}")
+  bucket        = lower("ami-manifests-${replace(coalesce(var.repo, "arkinfotech24/packer-ami-pipeline"), "/", "-")}-${var.region}")
   force_destroy = true
 
   tags = {
@@ -111,24 +111,33 @@ resource "aws_iam_role" "gha_packer_role" {
 }
 
 #########################################
-# IAM Policy for EC2, S3, DynamoDB
+# IAM Policy for Packer Build Permissions (EC2 + IAM + S3 + DynamoDB)
 #########################################
 
 data "aws_iam_policy_document" "gha_policy" {
   statement {
-    sid = "EC2Permissions"
+    sid = "PackerEC2Permissions"
     actions = [
-      "ec2:DescribeImages",
-      "ec2:CreateImage",
-      "ec2:RegisterImage",
+      "ec2:Describe*",
+      "ec2:GetPasswordData",
+      "ec2:CreateKeyPair",
+      "ec2:DeleteKeyPair",
       "ec2:CreateTags",
-      "ec2:DeleteTags",
       "ec2:RunInstances",
       "ec2:TerminateInstances",
-      "ec2:Describe*",
+      "ec2:CreateImage",
+      "ec2:RegisterImage",
+      "ec2:DeregisterImage",
+      "ec2:ModifyImageAttribute",
+      "ec2:CopyImage",
       "ec2:CreateVolume",
       "ec2:AttachVolume",
+      "ec2:DetachVolume",
       "ec2:DeleteVolume",
+      "ec2:CreateSnapshot",
+      "ec2:DeleteSnapshot",
+      "ec2:DescribeSnapshots",
+      "ec2:DescribeImages",
       "iam:PassRole"
     ]
     resources = ["*"]
@@ -138,7 +147,6 @@ data "aws_iam_policy_document" "gha_policy" {
     sid = "S3Permissions"
     actions = [
       "s3:PutObject",
-      "s3:PutObjectAcl",
       "s3:GetObject",
       "s3:ListBucket"
     ]
@@ -149,8 +157,13 @@ data "aws_iam_policy_document" "gha_policy" {
   }
 
   statement {
-    sid       = "DynamoDBPermissions"
-    actions   = ["dynamodb:PutItem"]
+    sid = "DynamoDBPermissions"
+    actions = [
+      "dynamodb:PutItem",
+      "dynamodb:GetItem",
+      "dynamodb:UpdateItem",
+      "dynamodb:DescribeTable"
+    ]
     resources = [aws_dynamodb_table.ami_inventory.arn]
   }
 }
@@ -164,4 +177,23 @@ resource "aws_iam_role_policy_attachment" "attach_policy" {
   role       = aws_iam_role.gha_packer_role.name
   policy_arn = aws_iam_policy.gha_packer_policy.arn
 }
+
+#########################################
+# Outputs
+#########################################
+
+# output "role_arn" {
+#   value       = aws_iam_role.gha_packer_role.arn
+#   description = "IAM Role ARN for GitHub Actions"
+# }
+
+# output "s3_bucket" {
+#   value       = aws_s3_bucket.manifests.bucket
+#   description = "S3 bucket for storing Packer manifests"
+# }
+
+# output "dynamodb_table" {
+#   value       = aws_dynamodb_table.ami_inventory.name
+#   description = "DynamoDB table for AMI inventory tracking"
+# }
 
