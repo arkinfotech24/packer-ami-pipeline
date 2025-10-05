@@ -21,16 +21,6 @@ provider "aws" {
   region = var.region
 }
 
-#variable "region" {
-#  description = "AWS region for the OIDC setup"
-#  type        = string
-#}
-
-#variable "repo" {
-#  description = "GitHub repo for OIDC trust (e.g., org/repo)"
-#  type        = string
-#}
-
 #########################################
 # GitHub OIDC Identity Provider
 #########################################
@@ -123,8 +113,11 @@ data "aws_iam_policy_document" "gha_policy" {
       "ec2:CreateKeyPair",
       "ec2:DeleteKeyPair",
       "ec2:CreateTags",
+      "ec2:DeleteTags",
       "ec2:RunInstances",
       "ec2:TerminateInstances",
+      "ec2:StopInstances",
+      "ec2:StartInstances",
       "ec2:CreateImage",
       "ec2:RegisterImage",
       "ec2:DeregisterImage",
@@ -148,7 +141,8 @@ data "aws_iam_policy_document" "gha_policy" {
     actions = [
       "s3:PutObject",
       "s3:GetObject",
-      "s3:ListBucket"
+      "s3:ListBucket",
+      "s3:PutObjectAcl"
     ]
     resources = [
       aws_s3_bucket.manifests.arn,
@@ -166,6 +160,16 @@ data "aws_iam_policy_document" "gha_policy" {
     ]
     resources = [aws_dynamodb_table.ami_inventory.arn]
   }
+
+  statement {
+    sid = "CloudWatchLogsPermissions"
+    actions = [
+      "logs:CreateLogGroup",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents"
+    ]
+    resources = ["*"]
+  }
 }
 
 resource "aws_iam_policy" "gha_packer_policy" {
@@ -182,18 +186,18 @@ resource "aws_iam_role_policy_attachment" "attach_policy" {
 # Outputs
 #########################################
 
-# output "role_arn" {
-#   value       = aws_iam_role.gha_packer_role.arn
-#   description = "IAM Role ARN for GitHub Actions"
-# }
+#output "role_arn" {
+#  value       = aws_iam_role.gha_packer_role.arn
+#  description = "IAM Role ARN for GitHub Actions"
+#}
 
-# output "s3_bucket" {
-#   value       = aws_s3_bucket.manifests.bucket
-#   description = "S3 bucket for storing Packer manifests"
-# }
+#output "s3_bucket" {
+#  value       = aws_s3_bucket.manifests.bucket
+#  description = "S3 bucket for storing Packer manifests"
+#}
 
-# output "dynamodb_table" {
-#   value       = aws_dynamodb_table.ami_inventory.name
-#   description = "DynamoDB table for AMI inventory tracking"
-# }
+#output "dynamodb_table" {
+#  value       = aws_dynamodb_table.ami_inventory.name
+#  description = "DynamoDB table for AMI inventory tracking"
+#}
 

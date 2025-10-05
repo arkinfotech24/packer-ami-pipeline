@@ -17,15 +17,15 @@ fi
 # ------------------------------------------------------------------------------
 case "$DISTRO" in
   al2023|amzn|amazon)
-    echo "[20-cloudwatch-agent] Installing CloudWatch Agent on Amazon Linux 2023..."
-    sudo dnf -y update -y
+    echo "[20-cloudwatch-agent] Installing CloudWatch Agent on Amazon Linux..."
+    sudo dnf -y update
     sudo dnf -y install amazon-cloudwatch-agent || true
     ;;
 
-  rhel9|rhel)
+  rhel|rhel9)
     echo "[20-cloudwatch-agent] Installing CloudWatch Agent on RHEL..."
-    sudo dnf -y update -y
-    sudo dnf -y install amazon-cloudwatch-agent || true
+    curl -o /tmp/amazon-cloudwatch-agent.rpm https://s3.amazonaws.com/amazoncloudwatch-agent/redhat/amd64/latest/amazon-cloudwatch-agent.rpm
+    sudo rpm -Uvh /tmp/amazon-cloudwatch-agent.rpm || true
     ;;
 
   ubuntu)
