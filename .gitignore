@@ -1,2 +1,8 @@
+# Terraform and Packer
 **/.terraform/*
-*.tfstate*
+*.tfstate
+*.tfstate.backup
+packer/manifest.json
+packer/logs/*
+packer/version.txt
+
