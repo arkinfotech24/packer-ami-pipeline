@@ -12,7 +12,59 @@ This workflow automates the creation of hardened Amazon Machine Images (AMIs) fo
 
 The diagram illustrates the flow from code commit to the final, deployable AMIs, showing the interaction between the cloud provider, CI/CD tool, and infrastructure-as-code tools.
 
-$$\text{Developer Commits Code (Packer/Scripts) to GitHub \textbf{main} Branch}$$$$\downarrow$$$$\textbf{GitHub Actions Workflow Triggered} (\texttt{packer-build.yml})$$$$\downarrow$$$$\textbf{Secure Authentication (OIDC)}: \text{GitHub Actions Assumes AWS IAM Role}$$$$\downarrow$$$$\textbf{Matrix Strategy (3 Parallel Jobs)}$$$$\begin{array}{ccc} \hline \text{Job 1: Build AL2023} & \text{Job 2: Build Ubuntu} & \text{Job 3: Build RHEL 9} \\ \hline \downarrow & \downarrow & \downarrow \\ \textbf{Packer Build}: \text{Uses } \texttt{prod.pkrvars.hcl} \text{ and } \texttt{10-hardening-al2023.sh} & \textbf{Packer Build}: \text{Uses } \texttt{prod.pkrvars.hcl} \text{ and } \texttt{10-hardening-ubuntu.sh} & \textbf{Packer Build}: \text{Uses } \texttt{prod.pkrvars.hcl} \text{ and } \texttt{10-hardening-rhel9.sh} \\ \downarrow & \downarrow & \downarrow \\ \text{Packer Launches EC2, Runs Provisioners (\textbf{Security Hardening})} & \text{Packer Launches EC2, Runs Provisioners (\textbf{Security Hardening})} & \text{Packer Launches EC2, Runs Provisioners (\textbf{Security Hardening})} \\ \downarrow & \downarrow & \downarrow \\ \textbf{AMI Registered and Tagged} \text{ in AWS (e.g., } \texttt{hardened-al2023-prod-AMI} \text{)} & \textbf{AMI Registered and Tagged} \text{ in AWS} & \textbf{AMI Registered and Tagged} \text{ in AWS} \\ \downarrow & \downarrow & \downarrow \\ \textbf{Manifest Uploaded to S3} \text{ (Artifact Tracking)} & \textbf{Manifest Uploaded to S3} & \textbf{Manifest Uploaded to S3} \\ \hline \end{array}$$$$\downarrow$$$$\textbf{Terraform Deployment Job (Test Consumer)}$$$$\downarrow$$$$\text{Terraform Init/Apply using all 3 new AMI IDs from the matrix outputs}$$$$\downarrow$$$$\textbf{Hardened AMIs Ready for Use by EC2, Auto Scaling, EKS Nodes}$$
+$$
+\text{Developer Commits Code (Packer/Scripts) to GitHub \textbf{main} Branch}
+\\
+\downarrow
+\\
+\textbf{GitHub Actions Workflow Triggered} (\texttt{packer-build.yml})
+\\
+\downarrow
+\\
+\textbf{Secure Authentication (OIDC)}: \text{GitHub Actions Assumes AWS IAM Role}
+\\
+\downarrow
+\\
+\textbf{Matrix Strategy (3 Parallel Jobs)}
+\\
+\begin{array}{|c|c|c|}
+\hline
+\text{Job 1: Build AL2023} & \text{Job 2: Build Ubuntu} & \text{Job 3: Build RHEL 9} \\
+\hline
+\downarrow & \downarrow & \downarrow \\
+\textbf{Packer Build}: \text{Uses } \texttt{prod.pkrvars.hcl} \text{ and } \texttt{10-hardening-al2023.sh} &
+\textbf{Packer Build}: \text{Uses } \texttt{prod.pkrvars.hcl} \text{ and } \texttt{10-hardening-ubuntu.sh} &
+\textbf{Packer Build}: \text{Uses } \texttt{prod.pkrvars.hcl} \text{ and } \texttt{10-hardening-rhel9.sh} \\
+\hline
+\downarrow & \downarrow & \downarrow \\
+\text{Packer Launches EC2, Runs Provisioners (\textbf{Security Hardening})} &
+\text{Packer Launches EC2, Runs Provisioners (\textbf{Security Hardening})} &
+\text{Packer Launches EC2, Runs Provisioners (\textbf{Security Hardening})} \\
+\hline
+\downarrow & \downarrow & \downarrow \\
+\textbf{AMI Registered and Tagged} \text{ in AWS (e.g., } \texttt{hardened-al2023-prod-AMI} \text{)} &
+\textbf{AMI Registered and Tagged} \text{ in AWS} &
+\textbf{AMI Registered and Tagged} \text{ in AWS} \\
+\hline
+\downarrow & \downarrow & \downarrow \\
+\textbf{Manifest Uploaded to S3} \text{ (Artifact Tracking)} &
+\textbf{Manifest Uploaded to S3} &
+\textbf{Manifest Uploaded to S3} \\
+\hline
+\end{array}
+\\
+\downarrow
+\\
+\textbf{Terraform Deployment Job (Test Consumer)}
+\\
+\downarrow
+\\
+\text{Terraform Init/Apply using all 3 new AMI IDs from the matrix outputs}
+\\
+\downarrow
+\\
+\textbf{Hardened AMIs Ready for Use by EC2, Auto Scaling, EKS Nodes}
+$$
 
 -----
 
