@@ -10,61 +10,63 @@ This workflow automates the creation of hardened Amazon Machine Images (AMIs) fo
 
 ## Visual Workflow Diagram: Packer $\to$ Multi-OS AMI Build Pipeline 🌟
 
-The diagram illustrates the flow from code commit to the final, deployable AMIs, showing the interaction between the cloud provider, CI/CD tool, and infrastructure-as-code tools.
+graph TD
+    %% Define Subgraphs for Clear Separation and Coloring (Optional: GitHub renders colors based on node/subgraph definitions)
+    subgraph S1 [GitHub Repository]
+        direction TD
+        A[Developer Commits Code] --> B{Push/PR to main/develop};
+    end
+    
+    subgraph S2 [GitHub Actions CI/CD Orchestration]
+        direction LR
+        B --> C(1. Workflow Triggered);
+        C --> D{2. OIDC Authentication};
+        D --> E(3. Assume AWS IAM Role);
+        E --> F[4. Matrix Strategy Start];
+    end
 
-$$
-\text{Developer Commits Code (Packer/Scripts) to GitHub \textbf{main} Branch}
-\\
-\downarrow
-\\
-\textbf{GitHub Actions Workflow Triggered} (\texttt{packer-build.yml})
-\\
-\downarrow
-\\
-\textbf{Secure Authentication (OIDC)}: \text{GitHub Actions Assumes AWS IAM Role}
-\\
-\downarrow
-\\
-\textbf{Matrix Strategy (3 Parallel Jobs)}
-\\
-\begin{array}{|c|c|c|}
-\hline
-\text{Job 1: Build AL2023} & \text{Job 2: Build Ubuntu} & \text{Job 3: Build RHEL 9} \\
-\hline
-\downarrow & \downarrow & \downarrow \\
-\textbf{Packer Build}: \text{Uses } \texttt{prod.pkrvars.hcl} \text{ and } \texttt{10-hardening-al2023.sh} &
-\textbf{Packer Build}: \text{Uses } \texttt{prod.pkrvars.hcl} \text{ and } \texttt{10-hardening-ubuntu.sh} &
-\textbf{Packer Build}: \text{Uses } \texttt{prod.pkrvars.hcl} \text{ and } \texttt{10-hardening-rhel9.sh} \\
-\hline
-\downarrow & \downarrow & \downarrow \\
-\text{Packer Launches EC2, Runs Provisioners (\textbf{Security Hardening})} &
-\text{Packer Launches EC2, Runs Provisioners (\textbf{Security Hardening})} &
-\text{Packer Launches EC2, Runs Provisioners (\textbf{Security Hardening})} \\
-\hline
-\downarrow & \downarrow & \downarrow \\
-\textbf{AMI Registered and Tagged} \text{ in AWS (e.g., } \texttt{hardened-al2023-prod-AMI} \text{)} &
-\textbf{AMI Registered and Tagged} \text{ in AWS} &
-\textbf{AMI Registered and Tagged} \text{ in AWS} \\
-\hline
-\downarrow & \downarrow & \downarrow \\
-\textbf{Manifest Uploaded to S3} \text{ (Artifact Tracking)} &
-\textbf{Manifest Uploaded to S3} &
-\textbf{Manifest Uploaded to S3} \\
-\hline
-\end{array}
-\\
-\downarrow
-\\
-\textbf{Terraform Deployment Job (Test Consumer)}
-\\
-\downarrow
-\\
-\text{Terraform Init/Apply using all 3 new AMI IDs from the matrix outputs}
-\\
-\downarrow
-\\
-\textbf{Hardened AMIs Ready for Use by EC2, Auto Scaling, EKS Nodes}
-$$
+    subgraph S3 [Parallel Packer Builds in AWS]
+        direction LR
+        G1{Job: AL2023 Build}
+        G2{Job: Ubuntu Build}
+        G3{Job: RHEL 9 Build}
+        
+        F --> G1;
+        F --> G2;
+        F --> G3;
+
+        G1 --> H1(Packer Build: AL2023 Provisioners);
+        G2 --> H2(Packer Build: Ubuntu Provisioners);
+        G3 --> H3(Packer Build: RHEL 9 Provisioners);
+        
+        H1 --> I1[AL2023 AMI Created & Tagged];
+        H2 --> I2[Ubuntu AMI Created & Tagged];
+        H3 --> I3[RHEL 9 AMI Created & Tagged];
+    end
+    
+    subgraph S4 [Deployment and Artifact Tracking]
+        direction TD
+        J(5. Collect 3 AMI IDs & Upload Manifests to S3);
+        K{6. Terraform Deployment Job};
+        L[Terraform Apply \n(Consumes all 3 new AMIs)];
+        M[Hardened AMIs Ready for Use];
+    end
+    
+    %% Connect Parallel Outputs to Sequential Next Step
+    I1 & I2 & I3 --> J;
+    
+    J --> K;
+    K --> L;
+    L --> M;
+    
+    %% Style adjustments for better visualization (GitHub-specific styling is limited, but this makes the flow clear)
+    style S1 fill:#E6FFED,stroke:#238636,stroke-width:2px
+    style S2 fill:#F0F8FF,stroke:#007BFF,stroke-width:2px
+    style S3 fill:#FFF5E6,stroke:#FF9900,stroke-width:2px
+    style S4 fill:#E8E8FF,stroke:#6F42C1,stroke-width:2px
+
+
+The diagram illustrates the flow from code commit to the final, deployable AMIs, showing the interaction between the cloud provider, CI/CD tool, and infrastructure-as-code tools.
 
 -----
 
