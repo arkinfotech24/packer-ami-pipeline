@@ -1,58 +1,36 @@
 This document provides a comprehensive guide and full write-up, including an introduction to the workflows, for building **Hardened Amazon Machine Images (AMIs)** using **Packer**, **GitHub Actions**, and **Terraform**. This pipeline automates the AMI creation process, ensuring security compliance and seamless integration into a modern CI/CD environment.
 
------
-
-# 🚀 Automated Hardened AMI Pipeline: Packer, GitHub Actions, and Terraform
-
-## Introduction to the Workflows
-
-The AMI pipeline described here integrates three core tools to achieve a secure, automated, and repeatable process for managing base operating system images:
-
-1.  **Terraform (Infrastructure Setup):** Manages the foundational AWS infrastructure required for the CI/CD pipeline, primarily the **IAM Roles** and **OpenID Connect (OIDC) Provider**. This enables GitHub Actions to securely assume a temporary role without storing long-lived credentials in the repository.
-2.  **Packer (Image Builder):** Defines the AMI blueprint using HCL. It sources a base OS (e.g., Amazon Linux), launches a temporary EC2 instance, runs the **security hardening scripts (provisioners)**, and converts the resulting machine into a secure, tagged AMI.
-3.  **GitHub Actions (Orchestrator):** Acts as the Continuous Integration/Continuous Delivery (CI/CD) engine. It triggers the Packer build on every relevant code push, handles secure AWS authentication via OIDC, validates the Packer template, executes the build, and prepares the output for downstream consumption (e.g., by a Terraform deployment module).
-
-### Workflow Diagram: Packer $\to$ Terraform Pipeline
-
-The visual workflow illustrates the data and control flow, starting from a developer committing code and ending with a hardened, deployable AMI.
-
-$$\text{1. Developer Pushes Code (Packer/Scripts) to GitHub}$$$$\downarrow$$$$\text{2. GitHub Actions (\texttt{packer-build.yml}) Triggered}$$$$\downarrow$$$$\text{3. GitHub Actions Assumes IAM Role via OIDC (Credential-less)}$$$$\downarrow$$$$\text{4. Action Executes Packer Build using Environment-specific Vars (\texttt{packer build -var-file=...})}$$$$\downarrow$$$$\text{5. Packer Launches EC2 Instance in AWS}$$$$\downarrow$$$$\text{6. Packer Runs Shell Provisioners (\texttt{10-hardening.sh} applies fixes)}$$$$\downarrow$$$$\text{7. Hardened AMI Created, Tagged (with \texttt{GITHUB\_SHA}), and Registered}$$$$\downarrow$$$$\text{8. Manifest Output (with AMI ID) Saved/Uploaded to S3 (Tracking)}$$$$\downarrow$$$$\text{9. Downstream Action (Optional): Terraform \texttt{test-consumer} Deploys AMI}$$$$
+I've created the comprehensive, multi-OS workflow with the detailed visual diagram, integrating **AWS**, **Packer**, **GitHub Actions**, and **Terraform** for a complete DevOps/SRE pipeline.
 
 -----
 
-## 📂 Project Structure and File Location
+# 🎨 Automated Hardened Multi-OS AMI Pipeline
 
-This structure separates concerns, making the project maintainable and scalable.
+This workflow automates the creation of hardened Amazon Machine Images (AMIs) for **Amazon Linux 2023 (AL2023)**, **Ubuntu**, and **RHEL 9** using a matrix strategy within **GitHub Actions**. It ensures secure, standardized, and repeatable image builds for multiple environments.
 
-| Directory/File | Purpose | Location |
-| :--- | :--- | :--- |
-| **`.github/workflows`** | **CI/CD Orchestration.** Contains the GitHub Actions workflow definition. | `.github/workflows/packer-build.yml` |
-| **`terraform/iam-oidc`** | **Prerequisites.** Terraform module for creating the **IAM Role** and **OIDC** provider. | `terraform/iam-oidc/main.tf` |
-| **`packer`** | **AMI Blueprint.** Root directory for Packer configuration files. | `packer/ami-pkr.hcl`, `packer/variables.pkr.hcl` |
-| **`packer/provisioners`** | **Hardening/Fixes.** Shell scripts executed *inside* the EC2 instance during build. | `packer/provisioners/10-hardening.sh` |
-| **`packer/vars`** | **Parameterization.** Environment-specific variable files for Packer. | `packer/vars/prod.pkrvars.hcl` |
-| **`test-consumer`** | **Consumption/Validation.** Example Terraform module to consume the latest AMI ID. | `test-consumer/main.tf` |
-| **`.gitignore`, `README.md`** | Standard repository files. | Root directory |
+## Visual Workflow Diagram: Packer $\to$ Multi-OS AMI Build Pipeline 🌟
+
+The diagram illustrates the flow from code commit to the final, deployable AMIs, showing the interaction between the cloud provider, CI/CD tool, and infrastructure-as-code tools.
+
+$$\text{Developer Commits Code (Packer/Scripts) to GitHub \textbf{main} Branch}$$$$\downarrow$$$$\textbf{GitHub Actions Workflow Triggered} (\texttt{packer-build.yml})$$$$\downarrow$$$$\textbf{Secure Authentication (OIDC)}: \text{GitHub Actions Assumes AWS IAM Role}$$$$\downarrow$$$$\textbf{Matrix Strategy (3 Parallel Jobs)}$$$$\begin{array}{ccc} \hline \text{Job 1: Build AL2023} & \text{Job 2: Build Ubuntu} & \text{Job 3: Build RHEL 9} \\ \hline \downarrow & \downarrow & \downarrow \\ \textbf{Packer Build}: \text{Uses } \texttt{prod.pkrvars.hcl} \text{ and } \texttt{10-hardening-al2023.sh} & \textbf{Packer Build}: \text{Uses } \texttt{prod.pkrvars.hcl} \text{ and } \texttt{10-hardening-ubuntu.sh} & \textbf{Packer Build}: \text{Uses } \texttt{prod.pkrvars.hcl} \text{ and } \texttt{10-hardening-rhel9.sh} \\ \downarrow & \downarrow & \downarrow \\ \text{Packer Launches EC2, Runs Provisioners (\textbf{Security Hardening})} & \text{Packer Launches EC2, Runs Provisioners (\textbf{Security Hardening})} & \text{Packer Launches EC2, Runs Provisioners (\textbf{Security Hardening})} \\ \downarrow & \downarrow & \downarrow \\ \textbf{AMI Registered and Tagged} \text{ in AWS (e.g., } \texttt{hardened-al2023-prod-AMI} \text{)} & \textbf{AMI Registered and Tagged} \text{ in AWS} & \textbf{AMI Registered and Tagged} \text{ in AWS} \\ \downarrow & \downarrow & \downarrow \\ \textbf{Manifest Uploaded to S3} \text{ (Artifact Tracking)} & \textbf{Manifest Uploaded to S3} & \textbf{Manifest Uploaded to S3} \\ \hline \end{array}$$$$\downarrow$$$$\textbf{Terraform Deployment Job (Test Consumer)}$$$$\downarrow$$$$\text{Terraform Init/Apply using all 3 new AMI IDs from the matrix outputs}$$$$\downarrow$$$$\textbf{Hardened AMIs Ready for Use by EC2, Auto Scaling, EKS Nodes}$$
 
 -----
 
-## 🛠️ Step-by-Step Implementation Guide
+## 1\. AWS and Terraform Infrastructure Setup
 
-### Step 1: Terraform Setup (OIDC and IAM Role) 🔑
+This foundational step ensures secure access for the CI/CD pipeline.
 
-This essential step provisions the secure method for the GitHub Action runner to interact with your AWS account.
-
-**File:** `terraform/iam-oidc/main.tf`
+**Location:** `terraform/iam-oidc/main.tf`
 
 ```terraform
-# IAM OIDC Provider: Trusts GitHub as an identity source
+# IAM OIDC Provider: Trusts GitHub's identity token
 resource "aws_iam_openid_connect_provider" "github" {
   url             = "https://token.actions.githubusercontent.com"
   client_id_list  = ["sts.amazonaws.com"]
-  thumbprint_list = ["<YOUR_PROVIDER_THUMBPRINT>"] # Replace with actual thumbprint
+  thumbprint_list = ["<YOUR_PROVIDER_THUMBPRINT>"] 
 }
 
-# IAM Role: Assumed by GitHub Actions Runner
+# IAM Role: Assumed by GitHub Actions Runner (Builds)
 resource "aws_iam_role" "packer_github_actions_role" {
   name = "packer-github-actions-role"
   assume_role_policy = jsonencode({
@@ -69,7 +47,7 @@ resource "aws_iam_role" "packer_github_actions_role" {
             "token.actions.githubusercontent.com:aud" : "sts.amazonaws.com"
           }
           StringLike = {
-            "token.actions.githubusercontent.com:sub" : "repo:<YOUR_GITHUB_ORG>/<YOUR_REPO_NAME>:ref:refs/heads/main" 
+            "token.actions.githubusercontent.com:sub" : "repo:<YOUR_GITHUB_ORG>/<YOUR_REPO_NAME>:ref:refs/heads/*" 
           }
         }
       },
@@ -77,23 +55,19 @@ resource "aws_iam_role" "packer_github_actions_role" {
   })
 }
 
-# IAM Policy Attachment: Granting Packer necessary EC2 and S3 permissions
-resource "aws_iam_role_policy" "packer_permissions" {
+# IAM Policy: Grants permissions for Packer to create and manage EC2 resources
+resource "aws_iam_role_policy_attachment" "packer_access" {
+  role       = aws_iam_role.packer_github_actions_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2FullAccess" # Use managed policy for brevity; prefer scoped custom policy
+}
+
+# IAM Policy: Grants permission to pass the EC2 Instance Profile role
+resource "aws_iam_role_policy" "packer_pass_role" {
   role = aws_iam_role.packer_github_actions_role.id
-  name = "PackerPermissionsPolicy"
+  name = "PackerPassRolePolicy"
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      {
-        Effect = "Allow",
-        Action = [
-            "ec2:RunInstances", "ec2:CreateImage", "ec2:CreateTags", "ec2:TerminateInstances", "ec2:DeregisterImage",
-            # ... all necessary EC2 actions ...
-            "s3:PutObject" # For manifest upload
-        ],
-        Resource = "*"
-      },
-      # Must include iam:PassRole for the EC2 instance profile
       {
         Effect = "Allow",
         Action = "iam:PassRole",
@@ -108,140 +82,135 @@ output "iam_role_arn" {
 }
 ```
 
-**Action:** Run `terraform init` and `terraform apply` within `terraform/iam-oidc/`.
+-----
 
-### Step 2: Packer Template and Variables Definition 📝
+## 2\. Packer Configuration (Multi-OS Dynamic Build)
 
-The core AMI definition, parameterized by environment.
+The Packer files are set up to dynamically adjust based on the `os_name` variable passed from the GitHub Actions matrix.
 
-**File:** `packer/ami-pkr.hcl`
+### File: `packer/variables.pkr.hcl` (Key Definitions)
 
 ```hcl
-// Sourcing the latest Amazon Linux 2 (example)
+variable "os_name" {
+  type    = string
+  default = "al2023"
+  validation {
+    condition = contains(["al2023", "ubuntu", "rhel9"], var.os_name)
+    error_message = "The 'os_name' variable must be one of 'al2023', 'ubuntu', or 'rhel9'."
+  }
+}
+
+locals {
+  os_details = {
+    al2023 = {
+      source_ami_name_filter = "al2023-ami-minimal-*"
+      ssh_username           = "ec2-user"
+      ami_owners             = ["amazon"]
+      provisioners           = ["00-base.sh", "10-hardening-al2023.sh", "20-cloudwatch-agent.sh"]
+    }
+    ubuntu = {
+      source_ami_name_filter = "ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"
+      ssh_username           = "ubuntu"
+      ami_owners             = ["099720109477"]
+      provisioners           = ["00-base.sh", "10-hardening-ubuntu.sh", "20-cloudwatch-agent.sh"]
+    }
+    rhel9 = {
+      source_ami_name_filter = "RHEL-9*-x86_64-*-Hourly2-EBS"
+      ssh_username           = "ec2-user"
+      ami_owners             = ["309956199498"] # Red Hat owner ID
+      provisioners           = ["00-base.sh", "10-hardening-rhel9.sh", "20-cloudwatch-agent.sh"]
+    }
+  }
+}
+// ... other variables ...
+```
+
+### File: `packer/ami-pkr.hcl` (Build Logic)
+
+```hcl
 source "amazon-ebs" "base" {
-  region                      = var.aws_region
+  // ... static configurations ...
+  
+  // Dynamic Source Selection
   source_ami_filter {
     filters = {
-      name                = var.source_ami_name_filter # e.g., "amzn2-ami-hvm-*"
-      root-device-type    = "ebs"
+      name                = local.os_details[var.os_name].source_ami_name_filter
     }
-    owners      = ["amazon"]
+    owners      = local.os_details[var.os_name].ami_owners
     most_recent = true
   }
   
-  instance_type               = var.instance_type
-  ssh_username                = var.ssh_username
-  ami_name                    = "hardened-${var.environment}-AMI-{{timestamp}}"
+  ssh_username                = local.os_details[var.os_name].ssh_username
+  ami_name                    = "hardened-${var.os_name}-${var.environment}-AMI-{{timestamp}}"
   
-  tags = {
-    Name           = "Hardened-Base-Image-${var.environment}"
-    Environment    = var.environment
-    Version        = "{{env `GITHUB_SHA`}}" // Tag with Git Commit SHA
-  }
-  iam_instance_profile        = var.instance_profile_name 
+  // ... tags, instance_profile_name ...
 }
 
-// Build Definition
 build {
-  name    = "hardened-image-build"
+  name    = "hardened-image-build-${var.os_name}"
   sources = ["source.amazon-ebs.base"]
 
-  // Provisioner 1: Base setup
-  provisioner "shell" {
-    scripts = ["provisioners/00-base.sh"]
-    execute_command = "sudo {{.Path}}"
+  // Dynamic Provisioner Execution based on OS
+  dynamic "provisioner" {
+    for_each = local.os_details[var.os_name].provisioners
+    content {
+      type            = "shell"
+      scripts         = ["provisioners/${provisioner.value}"]
+      execute_command = "sudo {{.Path}}"
+      # Ensure hardening scripts (e.g., 10-hardening-*.sh) use `set -e` to fail on error
+    }
   }
 
-  // Provisioner 2: SECURITY HARDENING
-  provisioner "shell" {
-    scripts = ["provisioners/10-hardening.sh"]
-    execute_command = "sudo {{.Path}}"
-    on_error        = "abort" // CRITICAL: Stop build if hardening fails
-  }
-  
-  // Provisioner 3: Install Monitoring Agent
-  provisioner "shell" {
-    scripts = ["provisioners/20-cloudwatch-agent.sh"]
-    execute_command = "sudo {{.Path}}"
-  }
-
-  // Post-Processor: Create build artifact manifest
+  // Post-Processor: Manifest output
   post-processor "manifest" {
-    output = "manifest.json"
+    output = "manifest-${var.os_name}.json" // Unique manifest file per OS
     strip_private_properties = true
   }
 }
 ```
 
-**File:** `packer/vars/prod.pkrvars.hcl` (Example Environment Variables)
+-----
 
-```hcl
-aws_region                = "us-east-1"
-environment               = "prod"
-instance_type             = "t3.large"
-source_ami_name_filter    = "amzn2-ami-hvm-*"
-ssh_username              = "ec2-user"
-instance_profile_name     = "packer-instance-profile-role"
-```
+## 3\. GitHub Actions Workflow (CI/CD Orchestration)
 
-### Step 3: Provisioner Scripts (Hardening) 🔒
-
-The hardening script ensures the AMI meets security baselines (e.g., CIS or STIG).
-
-**File:** `packer/provisioners/10-hardening.sh`
-
-```bash
-#!/bin/bash
-# 10-hardening.sh: Apply CIS/STIG Security Fixes
-set -euxo pipefail # Exit on any non-zero command status
-
-echo "--- Starting Security Hardening ---"
-
-# FIX 1: Ensure password hashing algorithm is SHA-512 (CIS 5.4.1.1)
-authconfig --passalgo=sha512 --update
-
-# FIX 2: Restrict root access to console only
-sed -i '/^root/s/bash/sbin\/nologin/' /etc/passwd
-
-# FIX 3: Disable unused services for a minimal footprint (CIS 2.2.1-2.2.14)
-systemctl disable avahi-daemon cups dhcpd dovecot httpd named nfs-server rpcbind smb snmpd
-systemctl mask avahi-daemon cups
-
-# FIX 4: Audit configuration changes
-# Example: Ensure all login failures are logged
-echo "auth required pam_wheel.so use_uid" >> /etc/pam.d/su
-
-echo "--- Hardening complete. ---"
-```
-
-### Step 4: GitHub Actions Workflow (CI/CD) ⚙️
-
-This is the orchestrator, automating the entire build process.
+The workflow uses a matrix to parallelize the AMI builds for the three operating systems.
 
 **File:** `.github/workflows/packer-build.yml`
 
 ```yaml
-name: Automated Packer AMI Pipeline
+name: Automated Packer AMI Pipeline - Multi-OS Build
 
 on:
   push:
-    branches: [ main, develop ] # Triggers on push to main or develop
+    branches: [ main, develop ]
     paths: [ 'packer/**' ]
-  workflow_dispatch: # Allows manual trigger
+  workflow_dispatch:
 
 permissions:
-  id-token: write  # Crucial for OIDC authentication
+  id-token: write
   contents: read
 
 env:
-  # Masked Secrets: Replace with the ARN output from Terraform Step 1
-  IAM_ROLE_ARN: arn:aws:iam::YOUR_AWS_ACCOUNT_ID:role/packer-github-actions-role
+  IAM_ROLE_ARN: arn:aws:iam::YOUR_AWS_ACCOUNT_ID:role/packer-github-actions-role # Masked Secret
   AWS_REGION: us-east-1
   PACKER_TEMPLATE: packer/ami-pkr.hcl
 
 jobs:
   build_ami:
     runs-on: ubuntu-latest
+    
+    # 🌟 Matrix Strategy to build all three OSs in parallel 🌟
+    strategy:
+      fail-fast: false
+      matrix:
+        os_type: [ al2023, ubuntu, rhel9 ] # Targets the three OSs
+    
+    # Define outputs to be consumed by the deployment job
+    outputs:
+      al2023_ami_id: ${{ steps.build_output.outputs.al2023_ami_id }}
+      ubuntu_ami_id: ${{ steps.build_output.outputs.ubuntu_ami_id }}
+      rhel9_ami_id: ${{ steps.build_output.outputs.rhel9_ami_id }}
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -252,7 +221,7 @@ jobs:
           role-to-assume: ${{ env.IAM_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Set up Packer
+      - name: Setup Packer
         uses: hashicorp/setup-packer@main
         with:
           version: "latest" 
@@ -260,44 +229,64 @@ jobs:
       - name: Determine Environment Variables
         id: vars
         run: |
-          # Use 'prod' variables for main branch, 'dev' otherwise
-          ENV_NAME="dev"
-          if [[ "${{ github.ref_name }}" == "main" ]]; then
-            ENV_NAME="prod"
-          fi
+          ENV_NAME="${{ github.ref_name == 'main' && 'prod' || 'dev' }}"
           echo "ENV_VARS_FILE=packer/vars/${ENV_NAME}.pkrvars.hcl" >> $GITHUB_OUTPUT
           echo "PACKER_ENV_VAR=${ENV_NAME}" >> $GITHUB_OUTPUT
           
-      - name: Validate and Build AMI
+      - name: Validate and Build AMI for ${{ matrix.os_type }}
         id: build
         run: |
-          packer validate -var-file=${{ steps.vars.outputs.ENV_VARS_FILE }} ${{ env.PACKER_TEMPLATE }}
-          packer build -var-file=${{ steps.vars.outputs.ENV_VARS_FILE }} ${{ env.PACKER_TEMPLATE }}
+          packer validate \
+            -var-file=${{ steps.vars.outputs.ENV_VARS_FILE }} \
+            -var "os_name=${{ matrix.os_type }}" \
+            ${{ env.PACKER_TEMPLATE }}
+            
+          packer build \
+            -var-file=${{ steps.vars.outputs.ENV_VARS_FILE }} \
+            -var "os_name=${{ matrix.os_type }}" \
+            ${{ env.PACKER_TEMPLATE }}
         env:
-          GITHUB_SHA: ${{ github.sha }} # Passes SHA for AMI Tagging
+          GITHUB_SHA: ${{ github.sha }}
 
-      - name: Extract AMI ID and Upload Manifest
+      - name: Extract AMI ID and Set Job Output
+        id: build_output
         run: |
-          # Extract AMI ID from manifest.json for tracking
-          AMI_ID=$(jq -r '.builds[0].artifact_id' manifest.json | cut -d ':' -f 2)
-          echo "AMI\_ID=$AMI\_ID" >> $GITHUB_ENV
-          echo "Successfully built AMI ID: $AMI\_ID for ${{ steps.vars.outputs.PACKER_ENV_VAR }}"
+          # The manifest name is dynamic: manifest-{os_name}.json
+          MANIFEST_FILE="manifest-${{ matrix.os_type }}.json"
+          AMI_ID=$(jq -r '.builds[0].artifact_id' ${MANIFEST_FILE} | cut -d ':' -f 2)
           
-          # Upload manifest to S3 bucket for external tracking
-          # aws s3 cp manifest.json s3://your-build-manifests/${{ steps.vars.outputs.PACKER_ENV_VAR }}/${{ github.sha }}/manifest.json
-
+          # Sets the AMI ID as a unique output variable for the deployment job
+          echo "::set-output name=${{ matrix.os_type }}_ami_id::${AMI_ID}" 
+          echo "Built AMI ID: ${AMI_ID} for ${{ matrix.os_type }}"
+          
+          # Optional: Upload artifact (manifest)
+          # aws s3 cp ${MANIFEST_FILE} s3://your-build-manifests/${{ matrix.os_type }}/${{ github.sha }}/manifest.json
+          
   deploy_test_consumer:
     needs: build_ami
     runs-on: ubuntu-latest
-    environment: ${{ needs.build_ami.outputs.PACKER_ENV_VAR }}
-    if: success() 
+    # Only run if all builds in the matrix succeeded
+    if: success()
+    environment: prod # Target environment for deployment
+    
     steps:
-      # ... (Steps to configure AWS credentials via OIDC - similar to above) ...
-      - name: Deploy Test Consumer with New AMI
+      - name: Configure AWS Credentials (for deployment)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.IAM_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
-      - run: |
+
+      - name: Deploy Test Consumers with New AMIs
+        run: |
           cd terraform/test-consumer
           terraform init
-          # Pass the output AMI ID from the build step to the deployment
-          terraform apply -auto-approve -var "ami_id=${{ env.AMI_ID }}"
+          
+          # Pass all three AMI IDs from the matrix output to Terraform
+          terraform apply -auto-approve \
+            -var "al2023_ami_id=${{ needs.build_ami.outputs.al2023_ami_id }}" \
+            -var "ubuntu_ami_id=${{ needs.build_ami.outputs.ubuntu_ami_id }}" \
+            -var "rhel9_ami_id=${{ needs.build_ami.outputs.rhel9_ami_id }}"
 ```
