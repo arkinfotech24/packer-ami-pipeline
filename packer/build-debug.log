@@ -1,0 +1,19 @@
+[1;32mbuild-al2023.amazon-ebs.al2023: output will be in this color.[0m
+[1;36mbuild-rhel9.amazon-ebs.rhel9: output will be in this color.[0m
+[1;35mbuild-ubuntu.amazon-ebs.ubuntu: output will be in this color.[0m
+
+[1;35m==> build-ubuntu.amazon-ebs.ubuntu: Prevalidating any provided VPC information[0m
+[1;35m==> build-ubuntu.amazon-ebs.ubuntu: Prevalidating AMI Name: hardened-ubuntu-dev-0.1.0-local-20251006-232112-20251007-032112[0m
+[1;32m==> build-al2023.amazon-ebs.al2023: Prevalidating any provided VPC information[0m
+[1;32m==> build-al2023.amazon-ebs.al2023: Prevalidating AMI Name: hardened-al2023-dev-0.1.0-local-20251006-232112-20251007-032112[0m
+[1;36m==> build-rhel9.amazon-ebs.rhel9: Prevalidating any provided VPC information[0m
+[1;36m==> build-rhel9.amazon-ebs.rhel9: Prevalidating AMI Name: hardened-rhel9-dev-0.1.0-local-20251006-232112-20251007-032112[0m
+[1;36m==> build-rhel9.amazon-ebs.rhel9: Found Image ID: ami-0e078af919796acf1[0m
+[1;32m==> build-al2023.amazon-ebs.al2023: Found Image ID: ami-014b824b957230c1f[0m
+[1;35m==> build-ubuntu.amazon-ebs.ubuntu: Found Image ID: ami-07a3add10195338ad[0m
+[1;36m==> build-rhel9.amazon-ebs.rhel9: Creating temporary keypair: packer_68e48728-354e-1939-745e-c2df19ce9329[0m
+[1;35m==> build-ubuntu.amazon-ebs.ubuntu: Creating temporary keypair: packer_68e48729-02a2-e484-f8d7-b522908bb8ea[0m
+[1;32m==> build-al2023.amazon-ebs.al2023: Creating temporary keypair: packer_68e48728-5eef-47bf-1800-f998a43d5ffb[0m
+[1;36m==> build-rhel9.amazon-ebs.rhel9: Launching a source AWS instance...[0m
+[1;35m==> build-ubuntu.amazon-ebs.ubuntu: Launching a source AWS instance...[0m
+[1;32m==> build-al2023.amazon-ebs.al2023: Launching a source AWS instance...[0m

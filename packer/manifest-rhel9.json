@@ -1,0 +1,14 @@
+{
+  "builds": [
+    {
+      "name": "rhel9",
+      "builder_type": "amazon-ebs",
+      "build_time": 1759881923,
+      "files": null,
+      "artifact_id": "us-east-1:ami-0aab97f13b6c54b06",
+      "packer_run_uuid": "b8dfaa29-50fc-8bba-cbbc-b27ed286a9c8",
+      "custom_data": null
+    }
+  ],
+  "last_run_uuid": "b8dfaa29-50fc-8bba-cbbc-b27ed286a9c8"
+}

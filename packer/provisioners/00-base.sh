@@ -39,10 +39,12 @@ case "$DISTRO" in
     echo "[00-base] Updating system packages (excluding kernel)..."
     export DEBIAN_FRONTEND=noninteractive
     sudo apt-get update -y
-    # Hold kernel packages to avoid restarts and rebuilds
     sudo apt-mark hold linux-image-generic linux-headers-generic linux-image-* linux-headers-* || true
     sudo apt-get upgrade -y || true
     sudo apt-get install -y jq curl unzip tar || true
+
+    # Optional: Fix libjq1 dependency (legacy workaround)
+    sudo apt-get install -y libonig5 || true
     ;;
 
   *)
