@@ -21,15 +21,11 @@ variable "instance_type" {
 }
 
 variable "env" {
-  type = string # dev/test/prod
+  type = string
 }
 
 variable "version" {
-  type = string # injected from Git or manually
-}
-
-variable "distro" {
-  type = string # "al2023" | "rhel9" | "ubuntu"
+  type = string
 }
 
 variable "subnet_id" {
@@ -61,7 +57,7 @@ variable "tags" {
 }
 
 # -----------------------------
-# Local variables & tagging
+# Locals
 # -----------------------------
 locals {
   base_tags = merge({
@@ -81,20 +77,18 @@ locals {
 }
 
 # -----------------------------
-# AMAZON LINUX 2023
+# Source Blocks
 # -----------------------------
 source "amazon-ebs" "al2023" {
-  region                   = var.region
-  instance_type            = var.instance_type
-  subnet_id                = var.subnet_id
-  security_group_id        = var.security_group_id
-  iam_instance_profile     = var.iam_instance_profile != "" ? var.iam_instance_profile : null
-  ssh_username             = "ec2-user"
-  ami_name                 = local.ami_names.al2023
-  ami_description          = "Hardened Amazon Linux 2023 AMI (${var.env}) version ${var.version}"
-  ami_virtualization_type  = "hvm"
-  force_deregister         = false
-  force_delete_snapshot    = false
+  region               = var.region
+  instance_type        = var.instance_type
+  subnet_id            = var.subnet_id
+  security_group_id    = var.security_group_id
+  iam_instance_profile = var.iam_instance_profile != "" ? var.iam_instance_profile : null
+  ssh_username         = "ec2-user"
+  ami_name             = local.ami_names.al2023
+  ami_description      = "Hardened Amazon Linux 2023 AMI (${var.env}) version ${var.version}"
+  ami_virtualization_type = "hvm"
 
   source_ami_filter {
     filters = {
@@ -102,7 +96,7 @@ source "amazon-ebs" "al2023" {
       root-device-type    = "ebs"
       virtualization-type = "hvm"
     }
-    owners      = ["137112412989"] # Amazon
+    owners      = ["137112412989"]
     most_recent = true
   }
 
@@ -117,19 +111,16 @@ source "amazon-ebs" "al2023" {
   snapshot_tags = local.base_tags
 }
 
-# -----------------------------
-# RHEL 9
-# -----------------------------
 source "amazon-ebs" "rhel9" {
-  region                   = var.region
-  instance_type            = var.instance_type
-  subnet_id                = var.subnet_id
-  security_group_id        = var.security_group_id
-  iam_instance_profile     = var.iam_instance_profile != "" ? var.iam_instance_profile : null
-  ssh_username             = "ec2-user"
-  ami_name                 = local.ami_names.rhel9
-  ami_description          = "Hardened RHEL 9 AMI (${var.env}) version ${var.version}"
-  ami_virtualization_type  = "hvm"
+  region               = var.region
+  instance_type        = var.instance_type
+  subnet_id            = var.subnet_id
+  security_group_id    = var.security_group_id
+  iam_instance_profile = var.iam_instance_profile != "" ? var.iam_instance_profile : null
+  ssh_username         = "ec2-user"
+  ami_name             = local.ami_names.rhel9
+  ami_description      = "Hardened RHEL 9 AMI (${var.env}) version ${var.version}"
+  ami_virtualization_type = "hvm"
 
   source_ami_filter {
     filters = {
@@ -137,7 +128,7 @@ source "amazon-ebs" "rhel9" {
       root-device-type    = "ebs"
       virtualization-type = "hvm"
     }
-    owners      = ["309956199498"] # Red Hat official
+    owners      = ["309956199498"]
     most_recent = true
   }
 
@@ -152,19 +143,16 @@ source "amazon-ebs" "rhel9" {
   snapshot_tags = local.base_tags
 }
 
-# -----------------------------
-# Ubuntu 22.04 / 24.04 LTS
-# -----------------------------
 source "amazon-ebs" "ubuntu" {
-  region                   = var.region
-  instance_type            = var.instance_type
-  subnet_id                = var.subnet_id
-  security_group_id        = var.security_group_id
-  iam_instance_profile     = var.iam_instance_profile != "" ? var.iam_instance_profile : null
-  ssh_username             = "ubuntu"
-  ami_name                 = local.ami_names.ubuntu
-  ami_description          = "Hardened Ubuntu LTS AMI (${var.env}) version ${var.version}"
-  ami_virtualization_type  = "hvm"
+  region               = var.region
+  instance_type        = var.instance_type
+  subnet_id            = var.subnet_id
+  security_group_id    = var.security_group_id
+  iam_instance_profile = var.iam_instance_profile != "" ? var.iam_instance_profile : null
+  ssh_username         = "ubuntu"
+  ami_name             = local.ami_names.ubuntu
+  ami_description      = "Hardened Ubuntu LTS AMI (${var.env}) version ${var.version}"
+  ami_virtualization_type = "hvm"
 
   source_ami_filter {
     filters = {
@@ -172,7 +160,7 @@ source "amazon-ebs" "ubuntu" {
       root-device-type    = "ebs"
       virtualization-type = "hvm"
     }
-    owners      = ["099720109477"] # Canonical
+    owners      = ["099720109477"]
     most_recent = true
   }
 
@@ -188,66 +176,101 @@ source "amazon-ebs" "ubuntu" {
 }
 
 # -----------------------------
-# Build Definition
+# Build Blocks
 # -----------------------------
 build {
-  sources = [
-    "source.amazon-ebs.al2023",
-    "source.amazon-ebs.rhel9",
-    "source.amazon-ebs.ubuntu"
-  ]
+  name    = "build-al2023"
+  sources = ["source.amazon-ebs.al2023"]
 
-  # Base setup (package install, basic config)
   provisioner "shell" {
-    script = "${path.root}/provisioners/00-base.sh"
-    environment_vars = [
-      "ENVIRONMENT=${var.env}",
-      "DISTRO=${var.distro}"
-    ]
-  }
-
-  # Security hardening
-  provisioner "shell" {
-    script = "${path.root}/provisioners/10-hardening.sh"
-    environment_vars = [
-      "ENVIRONMENT=${var.env}",
-      "DISTRO=${var.distro}"
-    ]
-  }
-
-  # CloudWatch Agent (optional)
-  provisioner "shell" {
-    only = [
-      "amazon-ebs.al2023",
-      "amazon-ebs.rhel9",
-      "amazon-ebs.ubuntu"
-    ]
-    script = "${path.root}/provisioners/20-cloudwatch-agent.sh"
-    pause_before = "5s"
-    environment_vars = [
-      "ENVIRONMENT=${var.env}",
-      "DISTRO=${var.distro}"
-    ]
+    script            = "${path.root}/provisioners/00-base.sh"
+    execute_command   = "sudo -E bash '{{.Path}}'"
+    environment_vars  = ["ENVIRONMENT=${var.env}", "DISTRO=al2023"]
     expect_disconnect = true
     valid_exit_codes  = [0, 1, 2300218]
   }
 
-  # Final log
   provisioner "shell" {
-    inline = [
-      "echo ✅ Build complete: ${var.distro}-${var.env}-${var.version}"
-    ]
+    script            = "${path.root}/provisioners/10-hardening-al2023.sh"
+    execute_command   = "sudo -E bash '{{.Path}}'"
+    environment_vars  = ["ENVIRONMENT=${var.env}", "DISTRO=al2023"]
+    expect_disconnect = true
+    valid_exit_codes  = [0, 1, 2300218]
+  }
+
+  provisioner "shell" {
+    script            = "${path.root}/provisioners/20-cloudwatch-agent.sh"
+    execute_command   = "sudo -E bash '{{.Path}}'"
+    pause_before      = "5s"
+    environment_vars  = ["ENVIRONMENT=${var.env}", "DISTRO=al2023"]
+    expect_disconnect = true
+    valid_exit_codes  = [0, 1, 2300218]
+  }
+
+  provisioner "shell" {
+    inline = ["echo ✅ Build complete: al2023-${var.env}-${var.version}"]
   }
 
   post-processor "manifest" {
-    output = "${path.root}/manifest.json"
+    output = "${path.root}/manifest-al2023.json"
   }
-
-   # Optional — uncomment to upload manifest to S3
-   post-processor "shell-local" {
-     inline = [
-       "aws s3 cp ${path.root}/manifest.json s3://ami-manifests-arkinfotech24-packer-ami-pipeline-us-east-1/"
-     ]
-   }
 }
 
+build {
+  name    = "build-rhel9"
+  sources = ["source.amazon-ebs.rhel9"]
+
+  provisioner "shell" {
+    script            = "${path.root}/provisioners/00-base.sh"
+    execute_command   = "sudo -E bash '{{.Path}}'"
+    environment_vars  = ["ENVIRONMENT=${var.env}", "DISTRO=rhel9"]
+    expect_disconnect = true
+    valid_exit_codes  = [0, 1, 2300218]
+  }
+
+  provisioner "shell" {
+    script            = "${path.root}/provisioners/10-hardening-rhel9.sh"
+    execute_command   = "sudo -E bash '{{.Path}}'"
+    environment_vars  = ["ENVIRONMENT=${var.env}", "DISTRO=rhel9"]
+    expect_disconnect = true
+    valid_exit_codes  = [0, 1, 2300218]
+  }
+
+  provisioner "shell" {
+    script            = "${path.root}/provisioners/20-cloudwatch-agent.sh"
+    execute_command   = "sudo -E bash '{{.Path}}'"
+    pause_before      = "5s"
+    environment_vars  = ["ENVIRONMENT=${var.env}", "DISTRO=rhel9"]
+    expect_disconnect = true
+    valid_exit_codes  = [0, 1, 2300218]
+  }
+
+  provisioner "shell" {
+    inline = ["echo ✅ Build complete: rhel9-${var.env}-${var.version}"]
+  }
+
+  post-processor "manifest" {
+    output = "${path.root}/manifest-rhel9.json"
+  }
+}
+
+build {
+  name    = "build-ubuntu"
+  sources = ["source.amazon-ebs.ubuntu"]
+
+  provisioner "shell" {
+    script            = "${path.root}/provisioners/00-base.sh"
+    execute_command   = "sudo -E bash '{{.Path}}'"
+    environment_vars  = ["ENVIRONMENT=${var.env}", "DISTRO=ubuntu"]
+    expect_disconnect = true
+    valid_exit_codes  = [0, 1,2300218]
+}
+
+  provisioner "shell" {
+    inline = ["echo ✅ Build complete: ubuntu-${var.env}-${var.version}"]
+  }
+
+  post-processor "manifest" {
+    output = "${path.root}/manifest-ubuntu.json"
+  }
+}

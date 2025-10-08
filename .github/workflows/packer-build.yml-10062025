@@ -16,24 +16,24 @@ on:
       distro:
         description: "Base distro"
         type: choice
-        options: [al2023, rhel9, ubuntu]
+        options: [al2023, rhel9]
         default: al2023
 
 permissions:
-  id-token: write
+  id-token: write   # for OIDC
   contents: read
 
 env:
   AWS_REGION: us-east-1
-  DDB_TABLE: ami-inventory
-  S3_BUCKET: ami-manifests-arkinfotech24/packer-ami-pipeline-us-east-1
+  DDB_TABLE: ami-inventory                  # from Terraform output
+  S3_BUCKET: ami-manifests-arkinfotech24/packer-ami-pipeline-us-east-1   # replace with your output
 
 jobs:
   packer:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        distro: [ al2023, rhel9, ubuntu ]
+        distro: [ al2023, rhel9 ]
       fail-fast: false
 
     steps:
@@ -55,7 +55,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: ${{ env.AWS_REGION }}
-          role-to-assume: arn:aws:iam::697624189101:role/gha-packer-role
+          role-to-assume: arn:aws:iam::697624189101:role/gha-packer-role   # <- replace with Terraform output
           role-session-name: gha-packer-session
 
       - name: Install Packer
@@ -93,9 +93,9 @@ jobs:
         working-directory: packer
         run: |
           packer build \
+            -only="source.amazon-ebs.${{ steps.envpick.outputs.DISTRO_IN }}" \
             -var-file=vars/${{ steps.envpick.outputs.ENV_NAME }}.pkrvars.hcl \
             -var "version=${{ steps.ver.outputs.VERSION }}" \
-            -var "distro=${{ steps.envpick.outputs.DISTRO_IN }}" \
             .
 
       - name: Upload manifest artifact

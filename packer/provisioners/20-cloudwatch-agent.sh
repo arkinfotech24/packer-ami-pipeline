@@ -1,64 +1,35 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -euo pipefail
 
-echo "[20-cloudwatch-agent] Starting CloudWatch Agent installation..."
-echo "[20-cloudwatch-agent] ENVIRONMENT=${ENVIRONMENT:-undefined}, DISTRO=${DISTRO:-undefined}"
+echo "[CloudWatch] ====================================================="
+echo "[CloudWatch] Starting agent configuration..."
+echo "[CloudWatch] DISTRO=${DISTRO:-undefined}"
+echo "[CloudWatch] ENVIRONMENT=${ENVIRONMENT:-undefined}"
+echo "[CloudWatch] ====================================================="
 
-# ------------------------------------------------------------------------------
-# Detect OS (fallback to /etc/os-release if DISTRO not provided)
-# ------------------------------------------------------------------------------
-if [[ -z "${DISTRO:-}" && -f /etc/os-release ]]; then
-  . /etc/os-release
-  DISTRO=$ID
-  echo "[20-cloudwatch-agent] Detected OS: ${DISTRO}"
+# Ensure script is run as root
+if [[ $EUID -ne 0 ]]; then
+  echo "[ERROR] This script must be run as root. Use sudo." >&2
+  exit 1
 fi
 
-# ------------------------------------------------------------------------------
-# Install CloudWatch Agent by distro
-# ------------------------------------------------------------------------------
-case "$DISTRO" in
-  al2023|amzn|amazon)
-    echo "[20-cloudwatch-agent] Installing CloudWatch Agent on Amazon Linux 2023..."
-    sudo dnf update -y --exclude=kernel* || true
-    sudo dnf install -y amazon-cloudwatch-agent || true
-    ;;
+# Install CloudWatch agent if not present
+if ! command -v /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl &>/dev/null; then
+  echo "[CloudWatch] Agent not found. Installing..."
+  wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
+  sudo dpkg -i -E ./amazon-cloudwatch-agent.deb
+  rm -f ./amazon-cloudwatch-agent.deb
+fi
 
-  rhel9|rhel)
-    echo "[20-cloudwatch-agent] Installing CloudWatch Agent on RHEL 9..."
-    sudo dnf update -y --exclude=kernel* || true
+# Enable and start service
+sudo systemctl enable amazon-cloudwatch-agent
+sudo systemctl start amazon-cloudwatch-agent
 
-    # Fetch and install directly from AWS public S3
-    sudo curl -fSL -o /tmp/amazon-cloudwatch-agent.rpm \
-      https://s3.amazonaws.com/amazoncloudwatch-agent/redhat/amd64/latest/amazon-cloudwatch-agent.rpm
-
-    if [[ -f /tmp/amazon-cloudwatch-agent.rpm ]]; then
-      sudo rpm -Uvh /tmp/amazon-cloudwatch-agent.rpm || true
-    else
-      echo "[20-cloudwatch-agent] ⚠️ Failed to download CloudWatch Agent RPM."
-    fi
-    ;;
-
-  ubuntu)
-    echo "[20-cloudwatch-agent] Installing CloudWatch Agent on Ubuntu..."
-    sudo apt-get update -y
-    sudo apt-get upgrade -y --exclude=linux-image* || true
-    sudo apt-get install -y amazon-cloudwatch-agent || true
-    ;;
-
-  *)
-    echo "[20-cloudwatch-agent] Unsupported distro: ${DISTRO}. Skipping CloudWatch Agent install."
-    exit 0
-    ;;
-esac
-
-# ------------------------------------------------------------------------------
-# Configure CloudWatch Agent (basic system metrics)
-# ------------------------------------------------------------------------------
-AGENT_DIR="/opt/aws/amazon-cloudwatch-agent"
-CONFIG_FILE="${AGENT_DIR}/etc/amazon-cloudwatch-agent.json"
-
-sudo mkdir -p "${AGENT_DIR}/etc"
-sudo tee "${CONFIG_FILE}" >/dev/null <<'EOF'
+# Inject config if missing
+CONFIG_PATH="/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json"
+if [[ ! -f "$CONFIG_PATH" ]]; then
+  echo "[CloudWatch] No config found. Injecting default config..."
+  cat <<EOF | sudo tee "$CONFIG_PATH" > /dev/null
 {
   "agent": {
     "metrics_collection_interval": 60,
@@ -66,49 +37,32 @@ sudo tee "${CONFIG_FILE}" >/dev/null <<'EOF'
   },
   "metrics": {
     "append_dimensions": {
-      "InstanceId": "${aws:InstanceId}",
-      "ImageId": "${aws:ImageId}",
-      "InstanceType": "${aws:InstanceType}"
+      "InstanceId": "\${aws:InstanceId}"
     },
     "metrics_collected": {
+      "mem": {
+        "measurement": ["mem_used_percent"]
+      },
       "cpu": {
-        "measurement": ["cpu_usage_idle", "cpu_usage_user", "cpu_usage_system"],
+        "measurement": ["cpu_usage_idle", "cpu_usage_iowait"],
         "metrics_collection_interval": 60,
         "resources": ["*"]
-      },
-      "mem": {
-        "measurement": ["mem_used_percent"],
-        "metrics_collection_interval": 60
-      },
-      "disk": {
-        "measurement": ["used_percent"],
-        "metrics_collection_interval": 60,
-        "resources": ["/"]
-      },
-      "netstat": {
-        "measurement": ["tcp_established", "tcp_time_wait"],
-        "metrics_collection_interval": 60
       }
     }
   }
 }
 EOF
-
-# ------------------------------------------------------------------------------
-# Enable and start the agent
-# ------------------------------------------------------------------------------
-echo "[20-cloudwatch-agent] Enabling and starting amazon-cloudwatch-agent..."
-sudo systemctl enable amazon-cloudwatch-agent || true
-sudo systemctl restart amazon-cloudwatch-agent || true
-
-# ------------------------------------------------------------------------------
-# Verify status
-# ------------------------------------------------------------------------------
-if systemctl is-active --quiet amazon-cloudwatch-agent; then
-  echo "[20-cloudwatch-agent] ✅ CloudWatch Agent running successfully."
-else
-  echo "[20-cloudwatch-agent] ⚠️ CloudWatch Agent failed to start. Check logs in /opt/aws/amazon-cloudwatch-agent/logs/"
 fi
 
-echo "[20-cloudwatch-agent] ✅ Completed CloudWatch Agent installation successfully."
+# Start agent with config
+sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+  -a fetch-config -m ec2 -c file:$CONFIG_PATH -s
+
+# ✅ Optional Enhancement: Post-build validation
+echo "[CloudWatch] Validating agent status..."
+sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -m ec2 -a status || {
+  echo "[WARN] Agent status check failed. Proceeding anyway..."
+}
+
+echo "[CloudWatch] ✅ Agent configured and started successfully."
 

@@ -1,0 +1,64 @@
+name: Packer Dry Run (Debug Mode)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "AMI version (e.g. 1.0.10)"
+        required: true
+        default: "1.0.10"
+
+env:
+  AWS_REGION: us-east-1
+  PKR_VAR_version: ${{ github.event.inputs.version }}
+  PKR_VAR_environment: dev
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-dryrun:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        distro: [al2023, rhel9, ubuntu]
+      fail-fast: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::697624189101:role/gha-packer-role
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Packer
+        uses: hashicorp/setup-packer@v3
+        with:
+          version: "1.11.0"
+
+      - name: Initialize Packer
+        run: packer init .
+
+      - name: Validate templates
+        run: packer validate -var-file=vars/dev.pkrvars.hcl .
+
+      - name: Dry-run Packer build
+        run: |
+          echo "⚙️ Running dry-run for ${{ matrix.distro }}"
+          packer build -debug -on-error=ask \
+            -only=amazon-ebs.${{ matrix.distro }} \
+            -var-file=vars/dev.pkrvars.hcl \
+            -var "version=${{ env.PKR_VAR_version }}" \
+            .
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: packer-${{ matrix.distro }}-logs
+          path: packer_log.txt
+
