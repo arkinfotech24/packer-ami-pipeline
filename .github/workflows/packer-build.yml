@@ -21,7 +21,7 @@ on:
 
 permissions:
   id-token: write
-  contents: read
+  contents: write  # Required for release creation
 
 env:
   AWS_REGION: us-east-1
@@ -68,12 +68,10 @@ jobs:
         shell: bash
         run: |
           set -e
-          TAG="$(git describe --tags --abbrev=0 2>/dev/null || true)"
-          if [ -z "$TAG" ]; then
-            TAG="0.1.0"
-          fi
+          TAG="$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.1.0")"
           DATE="$(date +%Y.%m.%d)"
-          echo "VERSION=${TAG}-${DATE}-${GITHUB_RUN_NUMBER}" >> $GITHUB_OUTPUT
+          VERSION="${TAG}-${DATE}-${GITHUB_RUN_NUMBER}"
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Packer init
         working-directory: packer
@@ -127,4 +125,16 @@ jobs:
             "BuildId": {"S": "'"${GITHUB_RUN_ID}"'"},
             "Timestamp": {"S": "'"$(date -u +"%Y-%m-%dT%H:%M:%SZ")"'"}
           }'
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.ver.outputs.VERSION }}
+          name: Release ${{ steps.ver.outputs.VERSION }}
+          files: |
+            packer/manifest.json
+            packer/manifests/*.json
+            packer/logs/*.log
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
