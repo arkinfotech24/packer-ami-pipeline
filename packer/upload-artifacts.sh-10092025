@@ -1,0 +1,49 @@
+#!/bin/bash
+set -euo pipefail
+
+# Define variables
+BUCKET="ami-manifests-arkinfotech24"
+PREFIX="arkinfotech24"
+VERSION="1.0.10"  # Match your actual log suffix
+REPO_ROOT="/home/sysadmin/packer-ami-pipeline/packer"
+LOG_DIR="$REPO_ROOT/logs"
+MANIFEST_DIR="$REPO_ROOT/manifests"
+
+echo "[UPLOAD] Starting artifact upload for version: $VERSION"
+
+# Upload main manifest (if present)
+if [[ -f "$REPO_ROOT/manifest.json" ]]; then
+  aws s3 cp "$REPO_ROOT/manifest.json" \
+    s3://$BUCKET/$PREFIX/manifest-${VERSION}.json
+else
+  echo "[WARN] Missing: manifest.json"
+fi
+
+# Upload logs with versioned filenames
+for distro in rhel9 ubuntu al2023; do
+  LOG_PATH="$LOG_DIR/${distro}-${VERSION}.log"
+  if [[ -f "$LOG_PATH" ]]; then
+    aws s3 cp "$LOG_PATH" \
+      s3://$BUCKET/$PREFIX/logs/${distro}-${VERSION}.log
+  else
+    echo "[WARN] Missing log: $LOG_PATH"
+  fi
+done
+
+# Upload manifests only if directory exists
+if [[ -d "$MANIFEST_DIR" ]]; then
+  for distro in rhel9 ubuntu al2023; do
+    MANIFEST_PATH="$MANIFEST_DIR/${distro}.json"
+    if [[ -f "$MANIFEST_PATH" ]]; then
+      aws s3 cp "$MANIFEST_PATH" \
+        s3://$BUCKET/$PREFIX/manifests/${distro}-${VERSION}.json
+    else
+      echo "[WARN] Missing manifest: $MANIFEST_PATH"
+    fi
+  done
+else
+  echo "[INFO] Skipping manifest upload—directory not found: $MANIFEST_DIR"
+fi
+
+echo "[UPLOAD] ✅ All available artifacts uploaded to s3://$BUCKET/$PREFIX/"
+

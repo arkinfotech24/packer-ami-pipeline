@@ -176,7 +176,7 @@ source "amazon-ebs" "ubuntu" {
 }
 
 # -----------------------------
-# Build Blocks (Unconditional)
+# Build Blocks
 # -----------------------------
 build {
   name    = "build-al2023"
@@ -263,6 +263,14 @@ build {
     execute_command   = "sudo -E bash '{{.Path}}'"
     environment_vars  = ["ENVIRONMENT=${var.env}", "DISTRO=ubuntu"]
     expect_disconnect = true
-    valid_exit_codes  = [0, 1, 2300218]
+    valid_exit_codes  = [0, 1,2300218]
+}
+
+  provisioner "shell" {
+    inline = ["echo ✅ Build complete: ubuntu-${var.env}-${var.version}"]
+  }
+
+  post-processor "manifest" {
+    output = "${path.root}/manifest-ubuntu.json"
   }
 }
