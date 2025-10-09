@@ -21,7 +21,7 @@ on:
 
 permissions:
   id-token: write
-  contents: write  # Required for release creation
+  contents: write
 
 env:
   AWS_REGION: us-east-1
@@ -33,23 +33,18 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        distro: [ al2023, rhel9, ubuntu ]
+        distro: ${{ github.event_name == 'push' && fromJson('["al2023","rhel9","ubuntu"]') || fromJson(format('["{0}"]', inputs.distro) ) }}
       fail-fast: false
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set ENV from dispatch or default
+      - name: Set ENV
         id: envpick
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "ENV_NAME=${{ inputs.environment }}" >> $GITHUB_OUTPUT
-            echo "DISTRO_IN=${{ inputs.distro }}" >> $GITHUB_OUTPUT
-          else
-            echo "ENV_NAME=dev" >> $GITHUB_OUTPUT
-            echo "DISTRO_IN=${{ matrix.distro }}" >> $GITHUB_OUTPUT
-          fi
+          echo "ENV_NAME=${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'dev' }}" >> $GITHUB_OUTPUT
+          echo "DISTRO_IN=${{ matrix.distro }}" >> $GITHUB_OUTPUT
 
       - name: Configure AWS (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -67,11 +62,9 @@ jobs:
         id: ver
         shell: bash
         run: |
-          set -e
           TAG="$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.1.0")"
           DATE="$(date +%Y.%m.%d)"
-          VERSION="${TAG}-${DATE}-${GITHUB_RUN_NUMBER}"
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "VERSION=${TAG}-${DATE}-${GITHUB_RUN_NUMBER}" >> $GITHUB_OUTPUT
 
       - name: Packer init
         working-directory: packer
@@ -99,8 +92,9 @@ jobs:
       - name: Upload manifest artifact
         uses: actions/upload-artifact@v4
         with:
-          name: manifest-${{ steps.envpick.outputs.ENV_NAME }}-${{ steps.envpick.outputs.DISTRO_IN }}
+          name: manifest-${{ steps.ver.outputs.VERSION }}-${{ steps.envpick.outputs.DISTRO_IN }}
           path: packer/manifest.json
+          overwrite: true
 
       - name: Extract AMI and Region from manifest
         id: manifest
@@ -126,11 +120,18 @@ jobs:
             "Timestamp": {"S": "'"$(date -u +"%Y-%m-%dT%H:%M:%SZ")"'"}
           }'
 
+      - name: Generate Changelog
+        run: |
+          gem install github_changelog_generator
+          github_changelog_generator --user arkinfotech24 --project packer-ami-pipeline --token ${{ secrets.GITHUB_TOKEN }}
+          mv CHANGELOG.md packer/changelog-${{ steps.ver.outputs.VERSION }}.md
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.ver.outputs.VERSION }}
           name: Release ${{ steps.ver.outputs.VERSION }}
+          body_path: packer/changelog-${{ steps.ver.outputs.VERSION }}.md
           files: |
             packer/manifest.json
             packer/manifests/*.json
