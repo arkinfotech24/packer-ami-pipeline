@@ -65,6 +65,19 @@ jobs:
           TAG="$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.1.0")"
           DATE="$(date +%Y.%m.%d)"
           echo "VERSION=${TAG}-${DATE}-${GITHUB_RUN_NUMBER}" >> $GITHUB_OUTPUT
+      - name: Compute VERSION
+        id: ver
+        shell: bash
+        run: |
+          TAG="$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.1.0")"
+          DATE="$(date +%Y.%m.%d)"
+          echo "VERSION=${TAG}-${DATE}-${GITHUB_RUN_NUMBER}" >> $GITHUB_OUTPUT
+
+      - name: Cache Packer plugins
+        uses: actions/cache@v4
+        with:
+          path: ~/.config/packer/plugins
+          key: packer-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.pkr.hcl') }}
 
       - name: Packer init
         working-directory: packer
