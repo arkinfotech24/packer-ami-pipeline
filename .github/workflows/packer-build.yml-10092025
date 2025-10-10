@@ -1,0 +1,130 @@
+name: Packer AMI Build
+
+on:
+  push:
+    branches: [ master, main ]
+    paths:
+      - "packer/**"
+      - ".github/workflows/packer-build.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        type: choice
+        options: [dev, test, prod]
+        default: dev
+      distro:
+        description: "Base distro"
+        type: choice
+        options: [al2023, rhel9, ubuntu]
+        default: al2023
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  DDB_TABLE: ami-inventory
+  S3_BUCKET: ami-manifests-arkinfotech24/packer-ami-pipeline-us-east-1
+
+jobs:
+  packer:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        distro: [ al2023, rhel9, ubuntu ]
+      fail-fast: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set ENV from dispatch or default
+        id: envpick
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "ENV_NAME=${{ inputs.environment }}" >> $GITHUB_OUTPUT
+            echo "DISTRO_IN=${{ inputs.distro }}" >> $GITHUB_OUTPUT
+          else
+            echo "ENV_NAME=dev" >> $GITHUB_OUTPUT
+            echo "DISTRO_IN=${{ matrix.distro }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Configure AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: arn:aws:iam::697624189101:role/gha-packer-role
+          role-session-name: gha-packer-session
+
+      - name: Install Packer
+        uses: hashicorp/setup-packer@v2
+        with:
+          version: "1.11.0"
+
+      - name: Compute VERSION
+        id: ver
+        shell: bash
+        run: |
+          set -e
+          TAG="$(git describe --tags --abbrev=0 2>/dev/null || true)"
+          if [ -z "$TAG" ]; then
+            TAG="0.1.0"
+          fi
+          DATE="$(date +%Y.%m.%d)"
+          echo "VERSION=${TAG}-${DATE}-${GITHUB_RUN_NUMBER}" >> $GITHUB_OUTPUT
+
+      - name: Packer init
+        working-directory: packer
+        run: packer init .
+
+      - name: Validate
+        working-directory: packer
+        run: |
+          packer validate \
+            -var-file=vars/${{ steps.envpick.outputs.ENV_NAME }}.pkrvars.hcl \
+            -var "version=${{ steps.ver.outputs.VERSION }}" \
+            -var "distro=${{ steps.envpick.outputs.DISTRO_IN }}" \
+            .
+
+      - name: Build AMI
+        id: build
+        working-directory: packer
+        run: |
+          packer build \
+            -var-file=vars/${{ steps.envpick.outputs.ENV_NAME }}.pkrvars.hcl \
+            -var "version=${{ steps.ver.outputs.VERSION }}" \
+            -var "distro=${{ steps.envpick.outputs.DISTRO_IN }}" \
+            .
+
+      - name: Upload manifest artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: manifest-${{ steps.envpick.outputs.ENV_NAME }}-${{ steps.envpick.outputs.DISTRO_IN }}
+          path: packer/manifest.json
+
+      - name: Extract AMI and Region from manifest
+        id: manifest
+        run: |
+          AMI=$(jq -r '.builds[-1].artifact_id' packer/manifest.json | sed 's/^.*://')
+          REGION=$(jq -r '.builds[-1].custom_data.region' packer/manifest.json 2>/dev/null || echo "${AWS_REGION}")
+          echo "ami=$AMI" >> $GITHUB_OUTPUT
+          echo "region=$REGION" >> $GITHUB_OUTPUT
+
+      - name: Push manifest to S3
+        run: aws s3 cp packer/manifest.json s3://${{ env.S3_BUCKET }}/manifests/${{ steps.envpick.outputs.ENV_NAME }}/${{ steps.envpick.outputs.DISTRO_IN }}/manifest-${{ steps.ver.outputs.VERSION }}.json
+
+      - name: Write AMI record to DynamoDB
+        run: |
+          aws dynamodb put-item --table-name "${{ env.DDB_TABLE }}" --item '{
+            "AmiId": {"S": "'"${{ steps.manifest.outputs.ami }}"'"},
+            "Region": {"S": "'"${{ steps.manifest.outputs.region }}"'"},
+            "Env": {"S": "'"${{ steps.envpick.outputs.ENV_NAME }}"'"},
+            "Distro": {"S": "'"${{ steps.envpick.outputs.DISTRO_IN }}"'"},
+            "Version": {"S": "'"${{ steps.ver.outputs.VERSION }}"'"},
+            "Commit": {"S": "'"${GITHUB_SHA}"'"},
+            "BuildId": {"S": "'"${GITHUB_RUN_ID}"'"},
+            "Timestamp": {"S": "'"$(date -u +"%Y-%m-%dT%H:%M:%SZ")"'"}
+          }'
+
