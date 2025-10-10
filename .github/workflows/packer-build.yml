@@ -120,10 +120,23 @@ jobs:
             "Timestamp": {"S": "'"$(date -u +"%Y-%m-%dT%H:%M:%SZ")"'"}
           }'
 
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: false
+
+      - name: Install github_changelog_generator
+        run: gem install github_changelog_generator
+
       - name: Generate Changelog
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gem install github_changelog_generator
-          github_changelog_generator --user arkinfotech24 --project packer-ami-pipeline --token ${{ secrets.GITHUB_TOKEN }}
+          github_changelog_generator \
+            --user arkinfotech24 \
+            --project packer-ami-pipeline \
+            --token $GITHUB_TOKEN
           mv CHANGELOG.md packer/changelog-${{ steps.ver.outputs.VERSION }}.md
 
       - name: Publish GitHub Releases
