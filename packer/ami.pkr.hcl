@@ -212,7 +212,8 @@ build {
   }
 
   post-processor "manifest" {
-    output = "${path.root}/manifest-al2023.json"
+    output           = "${path.root}/manifest-al2023.json"
+    skip_create_ami  = true
   }
 }
 
@@ -250,7 +251,8 @@ build {
   }
 
   post-processor "manifest" {
-    output = "${path.root}/manifest-rhel9.json"
+    output           = "${path.root}/manifest-rhel9.json"
+    skip_create_ami  = true
   }
 }
 
@@ -263,6 +265,15 @@ build {
     execute_command   = "sudo -E bash '{{.Path}}'"
     environment_vars  = ["ENVIRONMENT=${var.env}", "DISTRO=ubuntu"]
     expect_disconnect = true
-    valid_exit_codes  = [0, 1, 2300218] 
-  } 
+    valid_exit_codes  = [0, 1, 2300218]
+  }
+
+  provisioner "shell" {
+    inline = ["echo ✅ Build complete: ubuntu-${var.env}-${var.version}"]
+  }
+
+  post-processor "manifest" {
+    output           = "${path.root}/manifest-ubuntu.json"
+    skip_create_ami  = true
+  }
 }
