@@ -1,15 +1,11 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
-# Usage:
-# ./scan-ami-trivy.sh --prefix hardened- --region us-east-1
-
-# -----------------------------
-# Parse arguments
-# -----------------------------
+# Default values
 PREFIX=""
-REGION="us-east-1"
+REGION=""
 
+# Parse arguments
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --prefix)
@@ -22,58 +18,42 @@ while [[ $# -gt 0 ]]; do
       ;;
     *)
       echo "❌ Unknown argument: $1"
-      echo "Usage: ./scan-ami-trivy.sh --prefix <tag-prefix> [--region <region>]"
       exit 1
       ;;
   esac
 done
 
+# Validate inputs
 if [[ -z "$PREFIX" ]]; then
   echo "❌ Tag prefix is required. Example: ./scan-ami-trivy.sh --prefix hardened- --region us-east-1"
   exit 1
 fi
 
-# ✅ Fix: Relax region format check to allow valid AWS regions
-if ! [[ "$REGION" =~ ^[a-z]{2}-[a-z0-9-]+-\d$ ]]; then
+if [[ ! "$REGION" =~ ^[a-z]{2}-[a-z]+-[0-9]+$ ]]; then
   echo "❌ Invalid AWS region format: $REGION"
   exit 1
 fi
 
-# -----------------------------
-# Discover AMIs by tag prefix
-# -----------------------------
-echo "🔍 Discovering AMIs with tag prefix: $PREFIX in region: $REGION..."
+# Confirm Trivy and AWS CLI are available
+command -v trivy >/dev/null || { echo "❌ Trivy is not installed or not in PATH"; exit 1; }
+command -v aws >/dev/null || { echo "❌ AWS CLI is not installed or not in PATH"; exit 1; }
 
-TAGGED_IMAGES=$(aws ec2 describe-images \
+# Resolve AMI ID by tag prefix
+AMI_ID=$(aws ec2 describe-images \
   --region "$REGION" \
-  --owners self \
-  --filters "Name=tag:Project,Values=packer-ami-pipeline" \
-  --query "Images[?starts_with(Tags[?Key=='Name'].Value | [0], \`${PREFIX}\`)].{Name:Tags[?Key=='Name'].Value | [0], ImageId:ImageId}" \
-  --output json)
+  --filters "Name=tag:Version,Values=$PREFIX*" \
+  --query 'Images[0].ImageId' \
+  --output text)
 
-if [[ "$TAGGED_IMAGES" == "[]" || -z "$TAGGED_IMAGES" ]]; then
-  echo "⚠️ No AMIs found with prefix: $PREFIX"
-  exit 0
+if [[ "$AMI_ID" == "None" ]]; then
+  echo "❌ No AMI found with prefix: $PREFIX"
+  exit 1
 fi
 
-# -----------------------------
-# Scan each discovered AMI
-# -----------------------------
-echo "$TAGGED_IMAGES" | jq -c '.[]' | while read -r image; do
-  TAG=$(echo "$image" | jq -r '.Name')
-  AMI_ID=$(echo "$image" | jq -r '.ImageId')
+echo "✅ Found AMI: $AMI_ID"
 
-  echo "✅ Found AMI: $AMI_ID (Tag: $TAG)"
+# Run Trivy scan
+trivy image --input "$AMI_ID" --format table
 
-  echo "🚀 Starting Trivy scan for $TAG..."
-  trivy vm \
-    --scanners vuln \
-    --aws-region "$REGION" \
-    "ami:$AMI_ID" \
-    --severity HIGH,CRITICAL \
-    --format table \
-    --output "trivy-report-${TAG}.txt"
-
-  echo "✅ Scan complete. Report saved to trivy-report-${TAG}.txt"
-done
+echo "✅ Trivy scan completed for AMI: $AMI_ID"
 

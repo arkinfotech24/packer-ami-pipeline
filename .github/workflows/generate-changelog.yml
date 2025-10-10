@@ -1,0 +1,49 @@
+name: 📦 Generate Changelog
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  VERSION: ${{ github.ref_name }}
+  STAMP: ${{ github.run_started_at || github.run_id }}
+  S3_BUCKET: ami-manifests-arkinfotech24/packer-ami-pipeline-us-east-1
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🧱 Checkout Repo
+        uses: actions/checkout@v3
+
+      - name: 💎 Install Ruby & github_changelog_generator
+        run: |
+          sudo apt update
+          sudo apt install ruby ruby-dev build-essential -y
+          echo 'export GEM_HOME="$HOME/.gem"' >> $HOME/.bashrc
+          echo 'export PATH="$HOME/.gem/bin:$PATH"' >> $HOME/.bashrc
+          source $HOME/.bashrc
+          gem install github_changelog_generator
+
+      - name: 📝 Generate Changelog
+        run: |
+          mkdir -p packer/changelog
+          github_changelog_generator \
+            --user arkinfotech24 \
+            --project packer-ami-pipeline \
+            --token ${{ secrets.GITHUB_TOKEN }}
+          mv CHANGELOG.md "packer/changelog/changelog-${VERSION}-${STAMP}.md"
+
+      - name: ☁️ Upload to S3 (optional)
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+          AWS_REGION: us-east-1
+        run: |
+          aws s3 cp "packer/changelog/changelog-${VERSION}-${STAMP}.md" \
+            "s3://${S3_BUCKET}/changelogs/"
+

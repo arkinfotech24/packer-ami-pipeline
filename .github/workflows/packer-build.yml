@@ -126,11 +126,11 @@ jobs:
           github_changelog_generator --user arkinfotech24 --project packer-ami-pipeline --token ${{ secrets.GITHUB_TOKEN }}
           mv CHANGELOG.md packer/changelog-${{ steps.ver.outputs.VERSION }}.md
 
-      - name: Publish GitHub Release
+      - name: Publish GitHub Releases
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.ver.outputs.VERSION }}
-          name: Release ${{ steps.ver.outputs.VERSION }}
+          name: Releases ${{ steps.ver.outputs.VERSION }}
           body_path: packer/changelog-${{ steps.ver.outputs.VERSION }}.md
           files: |
             packer/manifest.json

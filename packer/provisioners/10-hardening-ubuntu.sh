@@ -17,9 +17,21 @@ run_step() {
 
 echo "[Ubuntu] Starting CIS Level 1 hardening + CloudWatch setup..."
 
-# Enable universe repo for libonig5
+# Enable universe repo and legacy fallback for libonig5
 run_step sudo add-apt-repository universe
+run_step bash -c 'echo "deb http://archive.ubuntu.com/ubuntu focal main universe" > /etc/apt/sources.list.d/focal.list'
 run_step sudo apt-get update
+
+# Install libonig5 manually if needed
+echo "[Ubuntu] Checking for libonig5..."
+if ! dpkg -s libonig5 >/dev/null 2>&1; then
+  echo "[Ubuntu] libonig5 not found. Attempting manual install..."
+  run_step sudo apt-get install -y libonig5 || {
+    run_step wget http://archive.ubuntu.com/ubuntu/pool/universe/o/oniguruma/libonig5_6.9.4-1_amd64.deb
+    run_step sudo dpkg -i libonig5_6.9.4-1_amd64.deb
+    run_step rm -f libonig5_6.9.4-1_amd64.deb
+  }
+fi
 
 # Install libjq1 with fallback to static jq binary
 echo "[Ubuntu] Installing libjq1 with fallback to jq binary if needed..."

@@ -70,9 +70,9 @@ locals {
   timestamp = formatdate("YYYYMMDD-hhmmss", timestamp())
 
   ami_names = {
-    al2023 = "hardened-al2023-${var.env}-${var.version}-${formatdate("YYYYMMDD-hhmmss", timestamp())}"
-    rhel9  = "hardened-rhel9-${var.env}-${var.version}-${formatdate("YYYYMMDD-hhmmss", timestamp())}"
-    ubuntu = "hardened-ubuntu-${var.env}-${var.version}-${formatdate("YYYYMMDD-hhmmss", timestamp())}"
+    al2023 = "hardened-al2023-${var.env}-${var.version}-${local.timestamp}"
+    rhel9  = "hardened-rhel9-${var.env}-${var.version}-${local.timestamp}"
+    ubuntu = "hardened-ubuntu-${var.env}-${var.version}-${local.timestamp}"
   }
 }
 
@@ -107,7 +107,7 @@ source "amazon-ebs" "al2023" {
     delete_on_termination = true
   }
 
-  tags          = local.base_tags
+  tags          = merge(local.base_tags, { "BuildName" = "build-al2023" })
   snapshot_tags = local.base_tags
 }
 
@@ -139,7 +139,7 @@ source "amazon-ebs" "rhel9" {
     delete_on_termination = true
   }
 
-  tags          = local.base_tags
+  tags          = merge(local.base_tags, { "BuildName" = "build-rhel9" })
   snapshot_tags = local.base_tags
 }
 
@@ -171,12 +171,12 @@ source "amazon-ebs" "ubuntu" {
     delete_on_termination = true
   }
 
-  tags          = local.base_tags
+  tags          = merge(local.base_tags, { "BuildName" = "build-ubuntu" })
   snapshot_tags = local.base_tags
 }
 
 # -----------------------------
-# Build Blocks (Unconditional)
+# Build Blocks
 # -----------------------------
 build {
   name    = "build-al2023"
@@ -263,6 +263,6 @@ build {
     execute_command   = "sudo -E bash '{{.Path}}'"
     environment_vars  = ["ENVIRONMENT=${var.env}", "DISTRO=ubuntu"]
     expect_disconnect = true
-    valid_exit_codes  = [0, 1, 2300218]
-  }
+    valid_exit_codes  = [0, 1, 2300218] 
+  } 
 }
