@@ -213,9 +213,8 @@ build {
 
   post-processor "manifest" {
     output           = "${path.root}/manifest-al2023.json"
-    skip_create_ami  = true
+  #  skip_create_ami  = true
   }
-}
 
 build {
   name    = "build-rhel9"
@@ -252,9 +251,8 @@ build {
 
   post-processor "manifest" {
     output           = "${path.root}/manifest-rhel9.json"
-    skip_create_ami  = true
+#    skip_create_ami  = true
   }
-}
 
 build {
   name    = "build-ubuntu"
@@ -274,6 +272,6 @@ build {
 
   post-processor "manifest" {
     output           = "${path.root}/manifest-ubuntu.json"
-    skip_create_ami  = true
+ #   skip_create_ami  = true
   }
 }
