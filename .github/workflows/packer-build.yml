@@ -1,7 +1,7 @@
 name: Packer AMI Build
 
 on:
-  push:
+  pull_request:
     branches: [ master, main ]
     paths:
       - "packer/**"
