@@ -81,7 +81,11 @@ jobs:
 
       - name: Packer init
         working-directory: packer
-        run: packer init .
+        env:
+          PACKER_GITHUB_API_TOKEN: ${{ secrets.PACKER_GITHUB_API_TOKEN }}
+        run: |
+          export PACKER_GITHUB_API_TOKEN=${{ secrets.PACKER_GITHUB_API_TOKEN }} 
+          packer init .
 
       - name: Validate
         working-directory: packer
