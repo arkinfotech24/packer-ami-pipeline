@@ -70,9 +70,9 @@ locals {
   timestamp = formatdate("YYYYMMDD-hhmmss", timestamp())
 
   ami_names = {
-    al2023 = "hardened-al2023-${var.env}-${var.version}-${local.timestamp}"
-    rhel9  = "hardened-rhel9-${var.env}-${var.version}-${local.timestamp}"
-    ubuntu = "hardened-ubuntu-${var.env}-${var.version}-${local.timestamp}"
+    al2023 = "hardened-al2023-${var.env}-${var.version}-${formatdate("YYYYMMDD-hhmmss", timestamp())}"
+    rhel9  = "hardened-rhel9-${var.env}-${var.version}-${formatdate("YYYYMMDD-hhmmss", timestamp())}"
+    ubuntu = "hardened-ubuntu-${var.env}-${var.version}-${formatdate("YYYYMMDD-hhmmss", timestamp())}"
   }
 }
 

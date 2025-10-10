@@ -17,6 +17,18 @@ run_step() {
 
 echo "[Ubuntu] Starting CIS Level 1 hardening + CloudWatch setup..."
 
+# Enable universe repo for libonig5
+run_step sudo add-apt-repository universe
+run_step sudo apt-get update
+
+# Install libjq1 with fallback to static jq binary
+echo "[Ubuntu] Installing libjq1 with fallback to jq binary if needed..."
+if ! run_step sudo apt-get install -y libjq1; then
+  echo "[Ubuntu] libjq1 install failed. Falling back to static jq binary..."
+  run_step curl -Lo /usr/local/bin/jq https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64
+  run_step chmod +x /usr/local/bin/jq
+fi
+
 # Preseed mail configuration to suppress interactive prompt
 run_step bash -c 'echo "postfix postfix/mailname string your.domain.com" | sudo debconf-set-selections'
 run_step bash -c 'echo "postfix postfix/main_mailer_type string \"No configuration\"" | sudo debconf-set-selections'
