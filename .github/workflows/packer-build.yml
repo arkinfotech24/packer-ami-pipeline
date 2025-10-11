@@ -65,13 +65,6 @@ jobs:
           TAG="$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.1.0")"
           DATE="$(date +%Y.%m.%d)"
           echo "VERSION=${TAG}-${DATE}-${GITHUB_RUN_NUMBER}" >> $GITHUB_OUTPUT
-      - name: Compute VERSION
-        id: ver
-        shell: bash
-        run: |
-          TAG="$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.1.0")"
-          DATE="$(date +%Y.%m.%d)"
-          echo "VERSION=${TAG}-${DATE}-${GITHUB_RUN_NUMBER}" >> $GITHUB_OUTPUT
 
       - name: Cache Packer plugins
         uses: actions/cache@v4
@@ -118,7 +111,8 @@ jobs:
           echo "region=$REGION" >> $GITHUB_OUTPUT
 
       - name: Push manifest to S3
-        run: aws s3 cp packer/manifest.json s3://${{ env.S3_BUCKET }}/manifests/${{ steps.envpick.outputs.ENV_NAME }}/${{ steps.envpick.outputs.DISTRO_IN }}/manifest-${{ steps.ver.outputs.VERSION }}.json
+        run: |
+          aws s3 cp packer/manifest.json s3://${{ env.S3_BUCKET }}/manifests/${{ steps.envpick.outputs.ENV_NAME }}/${{ steps.envpick.outputs.DISTRO_IN }}/manifest-${{ steps.ver.outputs.VERSION }}.json
 
       - name: Write AMI record to DynamoDB
         run: |
@@ -164,4 +158,3 @@ jobs:
             packer/logs/*.log
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
